@@ -1,0 +1,40 @@
+## Interface: 70300
+## Name: SimpleClassPower
+## Title: |cffa335eeSimple|r|cffffffffClassPower|r
+## Author: Lars "Goldpaw" Norberg
+## Notes: |cff666666By Lars "Goldpaw" Norberg|r |n|n|cff4488ffPayPal|r|cffffffff:|r |n|cffffffffpaypal@cogwerkz.org|r|n|n|cff4488ffPatreon|r|cffffffff:|r |n|cffffffffwww.patreon.com/Cogwerkz|r
+## Version: 1.0
+## DefaultState: Enabled
+## SavedVariables: SimpleClassPower_DB
+## X-Website: https://www.patreon.com/Cogwerkz
+## X-Donate: PayPal:paypal@cogwerkz.org
+## X-Category: Interface Enhancements
+
+
+#########################################################
+#   Do NOT change the order of anything in this file!   #
+#########################################################
+
+core\wheel.lua
+core\libraries\clientbuild.lua
+#core\libraries\locale.lua
+core\libraries\hook.lua
+core\libraries\securehook.lua
+core\libraries\message.lua
+core\libraries\event.lua
+core\libraries\db.lua
+core\libraries\module.lua
+core\libraries\frame.lua
+core\libraries\statusbar.lua
+core\libraries\sound.lua
+core\libraries\tooltip.lua
+core\libraries\fader.lua
+core\libraries\mover.lua
+core\libraries\unitframe.lua
+core\libraries\slash.lua
+core\plugins\unitframe\classpower.lua
+
+colors.lua
+main.lua
+
+

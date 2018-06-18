@@ -1,0 +1,13 @@
+package-as: SimpleClassPower
+enable-nolib-creation: no
+
+move-folders:
+    SimpleClassPower/SimpleClassPower: SimpleClassPower
+
+license-output: LICENSE.txt
+
+ignore:
+    - CHANGELOG.md
+    - CODE_OF_CONDUCT.md
+    - LICENSE.md
+    - README.md
