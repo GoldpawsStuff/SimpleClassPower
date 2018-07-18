@@ -589,6 +589,12 @@ local Enable = function(self)
 	local Buffs = self.Buffs
 	local Debuffs = self.Debuffs
 
+	--if self.unit == "player" then 
+	--	for i,v in pairs(self) do 
+	--		print(i)
+	--	end
+	--end 
+
 	if (Auras or Buffs or Debuffs) then
 		local unit = self.unit
 
