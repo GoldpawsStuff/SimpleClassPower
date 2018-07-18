@@ -1,4 +1,4 @@
-## Interface: 70300
+## Interface: 80000
 ## Name: SimpleClassPower
 ## Title: |cffa335eeSimple|r|cffffffffClassPower|r
 ## Author: Lars "Goldpaw" Norberg
@@ -27,6 +27,7 @@ core\libraries\module.lua
 core\libraries\frame.lua
 core\libraries\statusbar.lua
 core\libraries\sound.lua
+core\libraries\tooltipscanner.lua
 core\libraries\tooltip.lua
 core\libraries\fader.lua
 core\libraries\mover.lua

@@ -1,4 +1,4 @@
-local LibStatusBar = CogWheel:Set("LibStatusBar", 28)
+local LibStatusBar = CogWheel:Set("LibStatusBar", 34)
 if (not LibStatusBar) then	
 	return
 end
@@ -216,15 +216,18 @@ local Update = function(self, elapsed)
 	if (value == min) or (max == min) then
 		bar:Hide()
 	else
-		local newSize, mult
+
+		local displaySize, mult
 		if (max > min) then
 			mult = (value-min)/(max-min)
-			newSize = mult * ((orientation == "RIGHT" or orientation == "LEFT") and width or height)
+			displaySize = mult * ((orientation == "RIGHT" or orientation == "LEFT") and width or height)
+			if (displaySize < .01) then 
+				displaySize = .01
+			end 
 		else
-			newSize = 0.0001
-			mult = 0.0001
+			mult = .01
+			displaySize = .01
 		end
-		local displaySize = math_max(newSize, 0.0001) -- sizes can't be 0 in Legion
 
 		-- if there's a sparkmap, let's apply it!
 		local sparkPoint, sparkAnchor
@@ -441,7 +444,7 @@ local OnUpdate = function(self, elapsed)
 			end 
 		end 
 	else
-		if (data.barDisplayValue <= data.barMin) or (data.barDisplayValue >= data.barMax) then
+		if (data.barDisplayValue <= data.barMin) or (data.barDisplayValue >= data.barMax) or (not data.smoothing) then
 			data.scaffold:SetScript("OnUpdate", nil)
 		end
 	end
@@ -531,7 +534,6 @@ StatusBar.SetValue = function(self, value, overrideSmoothing)
 	if (data.smoothing or (data.barDisplayValue > min) or (data.barDisplayValue < max)) then
 		if (not data.scaffold:GetScript("OnUpdate")) then
 			data.scaffold:SetScript("OnUpdate", OnUpdate)
-			data.smoothing = true
 		end
 	end
 	Update(self)
@@ -544,7 +546,7 @@ StatusBar.Clear = function(self)
 	Update(self)
 end
 
-StatusBar.SetMinMaxValues = function(self, min, max)
+StatusBar.SetMinMaxValues = function(self, min, max, overrideSmoothing)
 	local data = Bars[self]
 	if (data.barMin == min) and (data.barMax == max) then 
 		return 
@@ -554,11 +556,15 @@ StatusBar.SetMinMaxValues = function(self, min, max)
 	elseif (data.barValue < min) then
 		data.barValue = min
 	end
-	if (data.barDisplayValue > max) then
-		data.barDisplayValue = max
-	elseif (data.barDisplayValue < min) then
-		data.barDisplayValue = min
-	end
+	if overrideSmoothing then 
+		data.barDisplayValue = data.barValue
+	else 
+		if (data.barDisplayValue > max) then
+			data.barDisplayValue = max
+		elseif (data.barDisplayValue < min) then
+			data.barDisplayValue = min
+		end
+	end 
 	data.barMin = min
 	data.barMax = max
 	Update(self)
@@ -637,7 +643,8 @@ StatusBar.SetOrientation = function(self, orientation)
 end
 
 StatusBar.CreateFrame = function(self, type, name, ...)
-	return CreateFrame(type or "Frame", name, Bars[self].scaffold, ...)
+	return self:CreateFrame(type or "Frame", name, Bars[self].scaffold, ...)
+	--return CreateFrame(type or "Frame", name, Bars[self].scaffold, ...)
 end
 
 StatusBar.CreateTexture = function(self, ...)
@@ -829,34 +836,37 @@ LibStatusBar.CreateStatusBar = function(self, parent)
 	local statusbar = CreateFrame("Frame", nil, scaffold)
 	statusbar:SetAllPoints() -- lock down the points before we overwrite the methods
 
+	-- Embed LibFrame's frame creation and methods directly.
+	LibFrame:Embed(statusbar)
+
+	-- Change to our custom metatable and methods.
 	setmetatable(statusbar, StatusBar_MT)
 
-	local data = {
-		scaffold = scaffold,
-		bar = bar,
-		spark = spark,
-		statusbar = statusbar, 
+	local data = {}
+	data.scaffold = scaffold
+	data.bar = bar
+	data.spark = spark
+	data.statusbar = statusbar 
 
-		barMin = 0, -- min value
-		barMax = 1, -- max value
-		barValue = 0, -- real value
-		barDisplayValue = 0, -- displayed value while smoothing
-		barOrientation = "RIGHT", -- direction the bar is growing in 
-		barSmoothingMode = "bezier-fast-in-slow-out",
+	data.barMin = 0 -- min value
+	data.barMax = 1 -- max value
+	data.barValue = 0 -- real value
+	data.barDisplayValue = 0 -- displayed value while smoothing
+	data.barOrientation = "RIGHT" -- direction the bar is growing in 
+	data.barSmoothingMode = "bezier-fast-in-slow-out"
 
-		sparkThickness = 8,
-		sparkOffset = 1/32,
-		sparkDirection = "IN",
-		sparkDurationIn = .75, 
-		sparkDurationOut = .55,
-		sparkMinAlpha = .25,
-		sparkMaxAlpha = .95,
-		sparkMinPercent = 1/100,
-		sparkMaxPercent = 99/100,
+	data.sparkThickness = 8
+	data.sparkOffset = 1/32
+	data.sparkDirection = "IN"
+	data.sparkDurationIn = .75 
+	data.sparkDurationOut = .55
+	data.sparkMinAlpha = .25
+	data.sparkMaxAlpha = .95
+	data.sparkMinPercent = 1/100
+	data.sparkMaxPercent = 99/100
 
-		-- The real texcoords of the bar texture
-		texCoords = {0, 1, 0, 1}
-	}
+	-- The real texcoords of the bar texture
+	data.texCoords = {0, 1, 0, 1}
 
 	-- Give multiple objects access using their 'self' as key
 	Bars[statusbar] = data

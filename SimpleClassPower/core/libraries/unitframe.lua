@@ -1,4 +1,4 @@
-local LibUnitFrame = CogWheel:Set("LibUnitFrame", 21)
+local LibUnitFrame = CogWheel:Set("LibUnitFrame", 23)
 if (not LibUnitFrame) then	
 	return
 end
@@ -110,6 +110,10 @@ local Colors = {
 	disconnected = prepare( 153/255, 153/255, 153/255 ),
 	tapped = prepare( 153/255, 153/255, 153/255 ),
 	dead = prepare( 153/255, 153/255, 153/255 ),
+	xp = prepare( 18/255, 179/255, 21/255 ),
+	rested = prepare( 23/255, 93/255, 180/255 ),
+	restedbonus = prepare( 192/255, 111/255, 255/255 ),
+	artifact = prepare( 229/255, 204/255, 127/255 ),
 	quest = {
 		red = prepare( 204/255, 25/255, 25/255 ),
 		orange = prepare( 255/255, 128/255, 25/255 ),
@@ -240,7 +244,7 @@ local EnableUnitFrameVehicle = function(frame, unit)
 		other_unit = string_gsub(unit, "(%w+)pet(%d+)", "%1%2")
 	end 
 
-	local vehicleSwitcher = CreateFrame("Frame", nil, nil, "SecureHandlerStateTemplate")
+	local vehicleSwitcher = CreateFrame("Frame", nil, nil, "SecureHandlerAttributeTemplate")
 	vehicleSwitcher:SetAttribute("_real-unit", unit)
 	vehicleSwitcher:SetAttribute("_other-unit", other_unit)
 	vehicleSwitcher:SetFrameRef("_unitframe", frame)
@@ -467,7 +471,7 @@ UnitFrame.DisableElement = function(self, element)
 	
 	frameElementsEnabled[self][element] = nil
 	
-	if frequentUpdates[self][element] then
+	if (frequentUpdates[self] and frequentUpdates[self][element]) then
 		-- remove the element's frequent update entry
 		frequentUpdates[self][element].elapsed = nil
 		frequentUpdates[self][element].hz = nil

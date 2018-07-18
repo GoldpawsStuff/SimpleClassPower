@@ -1,4 +1,4 @@
-local LibModule = CogWheel:Set("LibModule", 11)
+local LibModule = CogWheel:Set("LibModule", 17)
 if (not LibModule) then	
 	return
 end
@@ -32,8 +32,13 @@ local tostring = tostring
 local type = type
 
 -- WoW API
+local GetAddOnEnableState = _G.GetAddOnEnableState
+local GetAddOnInfo = _G.GetAddOnInfo
+local GetNumAddOns = _G.GetNumAddOns
 local IsAddOnLoaded = _G.IsAddOnLoaded
 local IsLoggedIn = _G.IsLoggedIn
+local UnitName = _G.UnitName
+
 
 -- Library registries
 LibModule.addonDependencies = {} -- table holding module/widget/handler dependencies
@@ -53,10 +58,6 @@ LibModule.parentModule = LibModule.parentModule or {}
 local PRIORITY_HASH = { HIGH = true, NORMAL = true, LOW = true } -- hashed priority table, for faster validity checks
 local PRIORITY_INDEX = { "HIGH", "NORMAL", "LOW" } -- indexed/ordered priority table
 local DEFAULT_MODULE_PRIORITY = "NORMAL" -- default load priority for new modules
-
--- Game Client Constants
-local ENGINE_WOD = LibClientBuild:IsBuild("WoD")
-local ENGINE_CATA = LibClientBuild:IsBuild("Cata")
 
 -- Speed shortcuts
 local addonDependencies = LibModule.addonDependencies
@@ -291,9 +292,14 @@ local ModuleProtoType = {
 	GetOwner = function(self)
 		local parent = parentModule[self]
 		while parent do
-			parent = parentModule[parent]
+			local newParent = parentModule[parent]
+			if newParent then 
+				parent = newParent
+			else 
+				break
+			end
 		end
-		return parent
+		return parent or self -- adding the self for top level modules(?)
 	end,
 
 	-- Return whether or not the module is a top level module, 
@@ -487,7 +493,40 @@ LibModule.IsEnabled = function(self)
 	return enabledModules[self]
 end
 
-	
+
+local _GetAddOnInfo = function(index)
+	local name, title, notes, loadable, reason, security, newVersion = GetAddOnInfo(index)
+	local enabled = not(GetAddOnEnableState(UnitName("player"), index) == 0) 
+	return name, title, notes, enabled, loadable, reason, security
+end
+
+-- Check if an addon exists in the addon listing and loadable on demand
+LibModule.IsAddOnLoadable = function(self, target)
+	local target = string_lower(target)
+	for i = 1,GetNumAddOns() do
+		local name, title, notes, enabled, loadable, reason, security = _GetAddOnInfo(i)
+		if string_lower(name) == target then
+			if loadable then
+				return true
+			end
+		end
+	end
+end
+
+-- Check if an addon is enabled	in the addon listing
+-- *Making this available as a generic library method.
+LibModule.IsAddOnEnabled = function(self, target)
+	local target = string_lower(target)
+	for i = 1,GetNumAddOns() do
+		local name, title, notes, enabled, loadable, reason, security = _GetAddOnInfo(i)
+		if string_lower(name) == target then
+			if enabled then
+				return true
+			end
+		end
+	end
+end
+
 
 local embedMethods = {
 	NewModule = true, 
