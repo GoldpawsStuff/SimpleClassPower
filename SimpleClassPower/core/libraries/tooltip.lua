@@ -1,4 +1,4 @@
-local LibTooltip = CogWheel:Set("LibTooltip", 18)
+local LibTooltip = CogWheel:Set("LibTooltip", 19)
 if (not LibTooltip) then	
 	return
 end
@@ -537,7 +537,6 @@ Tooltip.AddBar = function(self, barType)
 		-- Add a value string, but let the modules handle it.
 		local value = bar:CreateFontString()
 		value:SetFontObject(GameTooltipText)
-		value:SetFont(value:GetFont(), 12, "OUTLINE")
 		value:SetPoint("CENTER", 0, 0)
 		value:SetDrawLayer("OVERLAY")
 		value:SetJustifyH("CENTER")
