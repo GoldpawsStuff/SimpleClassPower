@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.0.4] 2018-07-22
+### Changed
+- Library updates.
+
 ## [1.0.3] 2018-07-18
 ### Fixed
 - Rewrote and simplified rune module to accomodate the changed event return values in 8.0.1 which eventually caused "runeData" errors. 

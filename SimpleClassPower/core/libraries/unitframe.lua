@@ -1,4 +1,4 @@
-local LibUnitFrame = CogWheel:Set("LibUnitFrame", 23)
+local LibUnitFrame = CogWheel:Set("LibUnitFrame", 27)
 if (not LibUnitFrame) then	
 	return
 end
@@ -166,6 +166,10 @@ if (not customClassColors()) then
 end
 
 
+
+-- Utility Functions
+--------------------------------------------------------------------------
+
 -- Syntax check 
 local check = function(value, num, ...)
 	assert(type(num) == "number", ("Bad argument #%d to '%s': %s expected, got %s"):format(2, "Check", "number", type(num)))
@@ -180,9 +184,22 @@ local check = function(value, num, ...)
 end
 
 
+
 -- Library Updates
 --------------------------------------------------------------------------
+
+-- global update limit, no elements can go above this
+local THROTTLE = 1/30 
+
 local OnUpdate = function(self, elapsed)
+
+	-- Throttle the updates, to increase the performance. 
+	self.elapsed = (self.elapsed or 0) + elapsed
+	if (self.elapsed < THROTTLE) then
+		return
+	end
+	local elapsed = self.elapsed
+
 	for frame, frequentElements in pairs(frequentUpdates) do
 		for element, frequency in pairs(frequentElements) do
 			if frequency.hz then
@@ -196,6 +213,8 @@ local OnUpdate = function(self, elapsed)
 			end
 		end
 	end
+
+	self.elapsed = 0
 end
 
 
@@ -515,13 +534,14 @@ end
 -- This is shared by all unitframes, unless these methods 
 -- are specifically overwritten by the modules.
 UnitFrame.GetTooltip = function(self)
-	return LibUnitFrame:GetTooltip("CG_UnitFrameTooltip") or LibUnitFrame:CreateTooltip("CG_UnitFrameTooltip")
+	return LibUnitFrame:GetUnitFrameTooltip()
 end 
 
 UnitFrame.OnEnter = function(self)
 	local tooltip = self:GetTooltip()
 	tooltip:Hide()
 	tooltip:SetDefaultAnchor(self)
+	tooltip:SetMinimumWidth(160)
 	tooltip:SetUnit(self.unit)
 end
 
@@ -561,7 +581,7 @@ LibUnitFrame.GetScript = function(self, scriptHandler)
 end
 
 -- spawn and style a new unitframe
-LibUnitFrame.SpawnUnitFrame = function(self, unit, parent, styleFunc, ...)
+LibUnitFrame.SpawnUnitFrame = function(self, unit, parent, styleFunc, visibilityDriver, ...)
 	local frame = setmetatable(LibUnitFrame:CreateFrame("Button", nil, parent, "SecureUnitButtonTemplate"), UnitFrame_MT)
 	frame:SetFrameStrata("LOW")
 
@@ -630,7 +650,10 @@ LibUnitFrame.SpawnUnitFrame = function(self, unit, parent, styleFunc, ...)
 		EnableUnitFrameFrequent(frame)
 	end
 
-	local visibilityDriver = string_format("[@%s,exists]show;hide", unit)
+	-- Allow custom drivers to be used, put in basic ones otherwise
+	-- todo: make some generic smart exceptions for party and raid
+	visibilityDriver = visibilityDriver or string_format("[@%s,exists]show;hide", unit) 
+
 	frame:SetAttribute("_visibility-driver", visibilityDriver)
 	RegisterAttributeDriver(frame, "state-visibility", visibilityDriver)
 

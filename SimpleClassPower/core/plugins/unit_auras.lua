@@ -22,17 +22,6 @@ local EDGE_LOC_TEXTURE = [[Interface\Cooldown\edge-LoC]]
 local EDGE_NORMAL_TEXTURE = [[Interface\Cooldown\edge]]
 local BLING_TEXTURE = [[Interface\Cooldown\star4]]
 
--- Whitelisted auras we'll always display 
--- even though they fall under the criteria to be filtered out.
-local whiteList = {
-	[57723] 	= true, -- Exhaustion "Cannot benefit from Heroism or other similar effects." (Alliance version)
-	[57724] 	= true, -- Sated "Cannot benefit from Bloodlust or other similar effects." (Horde version)
-	[160455]	= true, -- Fatigued "Cannot benefit from Netherwinds or other similar effects." (Pet version)
-	[95809] 	= true, -- Insanity "Cannot benefit from Ancient Hysteria or other similar effects." (Pet version)
-	[15007] 	= true  -- Resurrection Sickness
-}
-
-
 
 
 -- Utility Functions
@@ -90,15 +79,54 @@ local Aura_PostClick = function(button, buttonPressed, down)
 	end 
 end 
 
+local Aura_UpdateTooltip = function(button)
+	local tooltip = button:GetTooltip()
+	tooltip:Hide()
+	tooltip:SetMinimumWidth(160)
+
+	local element = button._owner
+	if element.tooltipDefaultPosition then 
+		tooltip:SetDefaultAnchor(button)
+	elseif element.tooltipPoint then 
+		tooltip:SetOwner(button)
+		tooltip:Place(element.tooltipPoint, element.tooltipAnchor or button, element.tooltipRelPoint or element.tooltipPoint, element.tooltipOffsetX or 0, element.tooltipOffsetY or 0)
+	else 
+		tooltip:SetSmartAnchor(button, element.tooltipOffsetX or 10, element.tooltipOffsetY or 10)
+	end 
+
+	if button.isBuff then 
+		tooltip:SetUnitBuff(button.unit, button:GetID(), button.filter)
+	else 
+		tooltip:SetUnitDebuff(button.unit, button:GetID(), button.filter)
+	end 
+end
+
 local Aura_OnEnter = function(button)
 	if button.OnEnter then 
 		return button:OnEnter()
+	end 
+
+	button.isMouseOver = true
+	button.UpdateTooltip = Aura_UpdateTooltip
+	button:UpdateTooltip()
+
+	if button.PostEnter then 
+		return button:PostEnter()
 	end 
 end
 
 local Aura_OnLeave = function(button)
 	if button.OnLeave then 
 		return button:OnLeave()
+	end 
+
+	button.UpdateTooltip = nil
+
+	local tooltip = button:GetTooltip()
+	tooltip:Hide()
+
+	if button.PostLeave then 
+		return button:PostLeave()
 	end 
 end
 
@@ -122,7 +150,7 @@ local Aura_SetCooldownTimer = function(button, start, duration)
 	end 
 end 
 
-local HZ = 1/30
+local HZ = 1/10
 local Aura_UpdateTimer = function(button, elapsed)
 	if button.timeLeft then
 		button.elapsed = (button.elapsed or 0) + elapsed
@@ -237,6 +265,9 @@ local CreateAuraButton = function(element)
 	count:SetShadowColor(0, 0, 0, 1)
 	count:SetTextColor(250/255, 250/255, 250/255, .85)
 	button.Count = count
+
+	-- Borrow the unitframe tooltip
+	button.GetTooltip = element._owner.GetTooltip
 
 	-- Run user post creation method
 	if element.PostCreateButton then 
@@ -671,5 +702,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Auras", Enable, Disable, Proxy, 4)
+	Lib:RegisterElement("Auras", Enable, Disable, Proxy, 10)
 end 
