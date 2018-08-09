@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.0.5] 2018-08-09
+### Changed
+- Many library updates. 
+- Workaround for Auctionator's dumb coding style and `EnumerateFrames()` usage.
+
 ## [1.0.4] 2018-07-22
 ### Changed
 - Library updates.
