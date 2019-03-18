@@ -16,15 +16,14 @@ This is a simple addon that shows your class resources in a combo point manner w
 * Stagger *(Brewmaster Monk)*
 * Runes *(Death Knights)*
 
-## Planned but unreleased features  
-* Movable *(Coming in the near future!)*
-* Scalable *(Coming in the near future)*
+## Chat commands
+* **/scp**
 
-## **Pledge to our work:**  
+### **Pledge to our work:**  
 * Patreon: [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui)  
 * PayPal: [www.paypal.me/AzeriteUI](https://www.paypal.me/azeriteui)  
 
-## **Follow Azerite Team:**  
+### **Follow Azerite Team:**  
 * Discord: [discord.gg/MUSfWXd](https://discord.gg/MUSfWXd)  
 * Twitter: [@AzeriteUI](https://twitter.com/azeriteui)  
 * Instagram: [@AzeriteUI](https://instagram.com/azeriteui/)  
@@ -32,7 +31,7 @@ This is a simple addon that shows your class resources in a combo point manner w
 * YouTube: [@AzeriteUI](https://www.youtube.com/azeriteui)  
 * Reddit: [@AzeriteUI](https://www.reddit.com/r/azeriteui/)  
 
-## **Follow Goldpaw & Blakmane:**  
+### **Follow Goldpaw & Blakmane:**  
 * Twitter Blakmane: [@troko512](https://twitter.com/troko512)  
 * Twitter Goldpaw: [@GoldpawTheGreat](https://twitter.com/goldpawthegreat)  
 
