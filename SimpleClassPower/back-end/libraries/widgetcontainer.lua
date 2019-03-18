@@ -1,4 +1,4 @@
-local LibWidgetContainer = CogWheel:Set("LibWidgetContainer", 16)
+local LibWidgetContainer = CogWheel:Set("LibWidgetContainer", 18)
 if (not LibWidgetContainer) then	
 	return
 end
@@ -547,7 +547,6 @@ LibWidgetContainer.RegisterElement = function(self, elementName, enableFunc, dis
 				return 
 			end 
 		end  
-		return 
 	end 
 
 	-- Create our new element 
@@ -564,18 +563,19 @@ LibWidgetContainer.RegisterElement = function(self, elementName, enableFunc, dis
 
 	-- Postupdate existing frames embedding this if it exists
 	if needUpdate then 
+
 		-- Iterate all frames for it
-		for unitFrame, element in pairs(frameElementsEnabled) do 
+		for widgetFrame, element in pairs(frameElementsEnabled) do 
 			if (element == elementName) then 
 				-- Run the old disable method, 
 				-- to get rid of old events and onupdate handlers.
 				if old.Disable then 
-					old.Disable(unitFrame)
+					old.Disable(widgetFrame)
 				end 
 
 				-- Run the new enable method
 				if new.Enable then 
-					new.Enable(unitFrame, unitFrame.unit, true)
+					new.Enable(widgetFrame, widgetFrame.unit, true)
 				end 
 			end 
 		end 
