@@ -144,10 +144,14 @@ local Generic = setmetatable({
 
 
 		for i = 1, maxDisplayed do 
-			if (not element[i]:IsShown()) then 
-				element[i]:Show()
+			local point = element[i]
+			if (not point:IsShown()) then 
+				point:Show()
 			end 
-			element[i]:SetValue(min >= i and 1 or 0)
+			point:SetValue(min >= i and 1 or 0)
+			if point.PostUpdate then 
+				point:PostUpdate(value, 0, 1)
+			end 
 		end 
 
 		for i = maxDisplayed+1, #element do 
@@ -224,6 +228,14 @@ local Generic = setmetatable({
 						point:SetAlpha(1)
 					end 
 				end 
+
+				if (point.PostUpdate and point:IsShown()) then 
+					local value = point:GetValue()
+					local min, max = point:GetMinMaxValues()
+
+					point:PostUpdate(value, min, max)
+				end
+
 			end
 		end 
 	end
@@ -358,10 +370,17 @@ ClassPower.ComboPoints = setmetatable({
 		local maxDisplayed = element.maxDisplayed or element.max or max
 
 		for i = 1, maxDisplayed do 
-			if not element[i]:IsShown() then 
-				element[i]:Show()
+			local point = element[i]
+			if not point:IsShown() then 
+				point:Show()
 			end 
-			element[i]:SetValue(min >= i and 1 or 0)
+
+			local value = min >= i and 1 or 0
+			point:SetValue(value)
+
+			if point.PostUpdate then 
+				point:PostUpdate(value, 0, 1)
+			end 
 		end 
 
 		for i = maxDisplayed+1, #element do 
@@ -485,6 +504,10 @@ ClassPower.Runes = setmetatable({
 				rune:SetMinMaxValues(0, 1)
 				rune:SetValue(1, true)
 
+				if rune.PostUpdate then 
+					rune:PostUpdate(1, 0, 1)
+				end 
+
 				-- update count of available runes
 				min = min + 1
 
@@ -493,21 +516,27 @@ ClassPower.Runes = setmetatable({
 				rune:SetMinMaxValues(0, duration, true)
 				rune:SetValue(0, true)
 				rune:SetScript("OnUpdate", element.OnUpdateRune)
+
+				if rune.PostUpdate then 
+					rune:PostUpdate(0, 0, duration)
+				end 
 			end
 		end
 
 		-- Make sure the runes are shown
 		for i = 1, maxDisplayed do 
-			if not element[i]:IsShown() then 
-				element[i]:Show()
+			local rune = element[i]
+			if not rune:IsShown() then 
+				rune:Show()
 			end 
 		end 
 
 		-- Hide additional points in the classpower element, if any
 		for i = maxDisplayed + 1, #element do 
-			element[i]:SetValue(0)
-			if element[i]:IsShown() then 
-				element[i]:Hide()
+			local rune = element[i]
+			rune:SetValue(0)
+			if rune:IsShown() then 
+				rune:Hide()
 			end 
 		end 
 
@@ -538,11 +567,18 @@ ClassPower.Runes = setmetatable({
 			local fullAlpha = element.alphaNoCombatRunes or element.alphaNoCombat or .5
 			for i = 1, maxDisplayed do
 				local point = element[i]
-				point:SetStatusBarColor(r, g, b)
-				point:SetAlpha(i > min and chargingAlpha or fullAlpha)
-				if point.bg then 
-					point.bg:SetVertexColor(r*1/3, g*1/3, b*1/3)
-				end 
+				if point then 
+					point:SetStatusBarColor(r, g, b)
+					point:SetAlpha(i > min and chargingAlpha or fullAlpha)
+					if point.bg then 
+						point.bg:SetVertexColor(r*1/3, g*1/3, b*1/3)
+					end 
+					if (point.PostUpdate and point:IsShown()) then 
+						local value = point:GetValue()
+						local min, max = point:GetMinMaxValues()
+						point:PostUpdate(value, min, max)
+					end
+				end
 			end
 
 		-- Hidden
@@ -552,6 +588,12 @@ ClassPower.Runes = setmetatable({
 				if point then
 					point:SetStatusBarColor(r, g, b)
 					point:SetAlpha(0)
+
+					if (point.PostUpdate and point:IsShown()) then 
+						local value = point:GetValue()
+						local min, max = point:GetMinMaxValues()
+						point:PostUpdate(value, min, max)
+					end
 				end 
 			end 
 		end
@@ -603,13 +645,14 @@ ClassPower.SoulShards = setmetatable({
 		local maxDisplayed = element.maxDisplayed or element.max or max
 		
 		for i = 1, maxDisplayed do 
-			if not element[i]:IsShown() then 
-				element[i]:Show()
+			local point = element[i]
+			if not point:IsShown() then 
+				point:Show()
 			end 
-			if (i > numActive) then 
-				element[i]:SetValue(0)
-			else 
-				element[i]:SetValue(min - i + 1)
+			local value = (i > numActive) and 0 or (min - i + 1)
+			point:SetValue(value)
+			if point.PostUpdate then 
+				point:PostUpdate(value, 0, 1)
 			end 
 		end 
 
@@ -669,10 +712,14 @@ ClassPower.Stagger = setmetatable({
 		local maxDisplayed = element.maxDisplayed or element.max or max
 
 		for i = 1, maxDisplayed do 
-			if not element[i]:IsShown() then 
-				element[i]:Show()
+			local point = element[i]
+			if not point:IsShown() then 
+				point:Show()
 			end 
-			element[i]:SetValue(numPoints >= i and 1 or 0)
+			point:SetValue(numPoints >= i and 1 or 0)
+			if point.PostUpdate then 
+				point:PostUpdate(value, 0, 1)
+			end 
 		end 
 
 		for i = maxDisplayed + 1, #element do 
@@ -759,6 +806,11 @@ ClassPower.Stagger = setmetatable({
 						point:SetAlpha(1)
 					end 
 				end 
+				if (point.PostUpdate and point:IsShown()) then 
+					local value = point:GetValue()
+					local min, max = point:GetMinMaxValues()
+					point:PostUpdate(value, min, max)
+				end
 			end
 		end 
 	end
@@ -948,10 +1000,17 @@ local Disable = function(self)
 		if element._currentType then 
 			element:DisablePower()
 			element._currentType = nil
+			element.powerType = nil
 		end 
 
 		-- Remove generic events
 		self:UnregisterEvent("UNIT_DISPLAYPOWER", Proxy)
+		self:UnregisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
+		self:UnregisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
+		self:UnregisterEvent("UNIT_EXITING_VEHICLE", Proxy)
+		self:UnregisterEvent("UNIT_EXITED_VEHICLE", Proxy)
+		self:UnregisterEvent("UPDATE_OVERRIDE_ACTIONBAR", Proxy)
+		self:UnregisterEvent("UPDATE_POSSESS_BAR", Proxy)
 		self:UnregisterEvent("PLAYER_LEVEL_UP", Proxy)
 		self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED", Proxy)
 		--self:UnregisterEvent("PLAYER_TARGET_CHANGED", Proxy)
@@ -960,5 +1019,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 24)
+	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 26)
 end 
