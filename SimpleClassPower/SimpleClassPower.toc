@@ -38,6 +38,19 @@ back-end\libraries\slash.lua
 # Unit dependant library plugins
 back-end\plugins\unit_classpower.lua
 
+# Addon localization
+locale\enUS.lua
+locale\esES.lua
+locale\esMX.lua
+locale\esMX.lua
+locale\frFR.lua
+locale\koKR.lua
+locale\ptBR.lua
+locale\ptPT.lua
+locale\ruRU.lua
+locale\zhCN.lua
+locale\zhTW.lua
+
 # Addon specific data tables and methods. 
 front-end\private.lua
 front-end\stylesheet.lua
