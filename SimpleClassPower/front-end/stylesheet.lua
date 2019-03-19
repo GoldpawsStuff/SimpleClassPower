@@ -9,34 +9,8 @@ local Colors = Private.Colors
 -- Define everything here so the order 
 -- in which they call each other doesn't matter.
 local ClassPower_PostUpdate
-local ClassPower_PostUpdatePoint 
 local ClassPower_PostCreatePoint
 local UnitFramePlayerHUD
-
--- Called when a point's value is updated or shown. 
--- This callback is handled by the statusbar library on all bar updates, 
--- but called manually by our hook when the point is shown. 
-ClassPower_PostUpdatePoint = function(point, value, min, max)
-
-	-- In case we came here from the OnShow hook, 
-	-- we need to manually retrieve the bar values.  
-	if (not value) then 
-		value = point:GetValue()
-	end
-	if ((not min) or (not max)) then 
-		min, max = point:GetMinMaxValues()
-	end 
-
-	-- Base it all on the bar's current color
-	local r, g, b = point:GetStatusBarColor()
-	point.glow:SetVertexColor(r, g, b, .75)
-	point.slotTexture:SetVertexColor(r*.25, g*.25, b*.25, .85)
-
-	-- Adjust texcoords of the overlay glow to match the bars
-	local coords = point.glow.texCoords
-	point.glow:SetTexCoord(coords[1], coords[2], coords[4] - (coords[4]-coords[3]) * ((value-min)/(max-min)), coords[4])
-
-end
 
 -- Called once upon the initial point creation
 ClassPower_PostCreatePoint = function(element, id, point)
@@ -83,14 +57,6 @@ ClassPower_PostCreatePoint = function(element, id, point)
 	point.glow:SetTexture(layout.ClassPowerGlowTexture)
 	point.glow:SetTexCoord(layout.ClassPowerGlowTexCoordFunction(id))
 	point.glow.texCoords = {layout.ClassPowerGlowTexCoordFunction(id)}
-
-	-- Called when a point is updated in some way through its methods. 
-	-- This callback is handled by the statusbar library on all bar updates.
-	point.PostUpdate = ClassPower_PostUpdatePoint
-
-	-- We need a post update on element show too, to make sure the coloring is right. 
-	point:HookScript("OnShow", ClassPower_PostUpdatePoint)
-
 end
 
 -- Called after each class power update
@@ -99,13 +65,30 @@ ClassPower_PostUpdate = function(element, unit, min, max, newMax, powerType)
 	-- Retrieve the stylesheet
 	local layout = UnitFramePlayerHUD
 
-	-- Only thing we postupdate is the width of the frame,
-	-- as we want the resources to be centered.
+	-- Make sure the resources are centered
 	local elementWidth = (powerType == "RUNES" and 6 or powerType == "STAGGER" and 3 or 5) * layout.ClassPowerPointSize[1]
 	if elementWidth ~= element.width then 
 		element:SetWidth(elementWidth)
 		element.width = elementWidth
 	end
+
+	-- Update Glow overlays
+	for i = 1, #element do 
+		local point = element[i]
+		if point:IsShown() then 
+			local value = point:GetValue()
+			local min, max = point:GetMinMaxValues()
+		
+			-- Base it all on the bar's current color
+			local r, g, b = point:GetStatusBarColor()
+			point.glow:SetVertexColor(r, g, b, .75)
+			point.slotTexture:SetVertexColor(r*.25, g*.25, b*.25, .85)
+		
+			-- Adjust texcoords of the overlay glow to match the bars
+			local coords = point.glow.texCoords
+			point.glow:SetTexCoord(coords[1], coords[2], coords[4] - (coords[4]-coords[3]) * ((value-min)/(max-min)), coords[4])
+		end 
+	end 
 
 end
 
