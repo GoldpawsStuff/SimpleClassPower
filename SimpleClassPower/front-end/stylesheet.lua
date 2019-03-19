@@ -33,9 +33,9 @@ ClassPower_PostCreatePoint = function(element, id, point)
 	-- Position the point
 	-- We don't offer any growth choices, it's always right to left.
 	if (i == 1) then 
-		point:Place("LEFT", 0, 0)
+		point:Place("TOPLEFT", element, "TOPLEFT", 0, 0)
 	else 
-		point:Place("LEFT", element[id-1], "RIGHT", 0, 0)
+		point:Place("TOPLEFT", element[id-1], "TOPRIGHT", 0, 0)
 	end 
 
 	-- Backdrop, aligned to the full point
@@ -96,7 +96,7 @@ UnitFramePlayerHUD = {
 
 	-- These are not the size and places of the actual element, 
 	-- do NOT change these as they are needed for it to function!
-	ClassPowerSize = { 2,2 }, 
+	ClassPowerSize = { 6*70, 70 }, 
 	ClassPowerPlace = { "CENTER", 0, 0 },
 
 	-- Point bars
