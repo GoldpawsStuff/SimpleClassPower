@@ -74,17 +74,35 @@ end
 
 -- Populate Color Tables
 -----------------------------------------------------------------
+-- some basic ui colors used by all text
+colorDB.normal = createColor(229/255, 178/255, 38/255)
+colorDB.highlight = createColor(250/255, 250/255, 250/255)
+colorDB.title = createColor(255/255, 234/255, 137/255)
+colorDB.offwhite = createColor(196/255, 196/255, 196/255)
+
+-- Unit Class Coloring
+-- Original colors at https://wow.gamepedia.com/Class#Class_colors
+colorDB.class = {}
+colorDB.class.DEATHKNIGHT = createColor(176/255, 31/255, 79/255)
+colorDB.class.DEMONHUNTER = createColor(163/255, 48/255, 201/255)
+colorDB.class.DRUID = createColor(255/255, 125/255, 10/255)
+colorDB.class.HUNTER = createColor(191/255, 232/255, 115/255) 
+colorDB.class.MAGE = createColor(105/255, 204/255, 240/255)
+colorDB.class.MONK = createColor(0/255, 255/255, 150/255)
+colorDB.class.PALADIN = createColor(225/255, 160/255, 226/255)
+colorDB.class.PRIEST = createColor(176/255, 200/255, 225/255)
+colorDB.class.ROGUE = createColor(255/255, 225/255, 95/255) 
+colorDB.class.SHAMAN = createColor(32/255, 122/255, 222/255) 
+colorDB.class.WARLOCK = createColor(148/255, 130/255, 201/255) 
+colorDB.class.WARRIOR = createColor(229/255, 156/255, 110/255) 
+colorDB.class.UNKNOWN = createColor(195/255, 202/255, 217/255)
+
 -- power
 colorDB.power = {}
---colorDB.power.MANA = createColor(0/255, 116/255, 255/255) -- Druid, Mage, Monk, Paladin, Priest, Shaman, Warlock
 colorDB.power.MANA = createColor(80/255,  116/255, 255/255) -- Druid, Mage, Monk, Paladin, Priest, Shaman, Warlock
 colorDB.power.RAGE = createColor(255/255, 22/255, 0/255) -- Druids, Warriors
 colorDB.power.FOCUS = createColor(125/255, 168/255, 195/255) -- Hunters and Hunter Pets
 colorDB.power.ENERGY = createColor(254/255, 245/255, 145/255) -- Rogues, Druids, Monks
---colorDB.power.ENERGY_CRYSTAL = createColor(40/255, 178/255, 141/255) -- Rogues, Druids, Monks
-colorDB.power.ENERGY_CRYSTAL = createColor(0/255, 167/255, 141/255) -- Rogues, Druids, Monks
---colorDB.power.ENERGY = createColor(0/255, 255/255, 141/255) -- Rogues, Druids, Monks
---colorDB.power.COMBO_POINTS = createColor(0/255, 245/255, 104/255) -- Rogues, Druids
 colorDB.power.COMBO_POINTS = createColor(220/255, 68/255,  25/255) -- Rogues, Druids, Vehicles
 colorDB.power.RUNES = createColor(100/255, 155/255, 225/255) -- Death Knight 
 colorDB.power.RUNIC_POWER = createColor(0/255, 236/255, 255/255) -- Death Knights
@@ -93,7 +111,6 @@ colorDB.power.LUNAR_POWER = createColor(121/255, 152/255, 192/255) -- Balance Dr
 colorDB.power.HOLY_POWER = createColor(245/255, 254/255, 145/255) -- Retribution Paladins 
 colorDB.power.MAELSTROM = createColor(0/255, 188/255, 255/255) -- Shamans
 colorDB.power.INSANITY = createColor(102/255, 64/255, 204/255) -- Shadow Priests 
---colorDB.power.CHI = createColor(181/255, 255/255, 234/255) -- Monk 
 colorDB.power.CHI = createColor(181/255 *.7, 255/255, 234/255 *.7) -- Monk 
 colorDB.power.ARCANE_CHARGES = createColor(121/255, 152/255, 192/255) -- Arcane Mage
 colorDB.power.FURY = createColor(255/255, 0/255, 111/255) -- Vengeance Demon Hunter
