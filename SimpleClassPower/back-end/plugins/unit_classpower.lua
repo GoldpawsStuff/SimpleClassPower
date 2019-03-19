@@ -149,9 +149,6 @@ local Generic = setmetatable({
 				point:Show()
 			end 
 			point:SetValue(min >= i and 1 or 0)
-			if point.PostUpdate then 
-				point:PostUpdate(value, 0, 1)
-			end 
 		end 
 
 		for i = maxDisplayed+1, #element do 
@@ -228,14 +225,6 @@ local Generic = setmetatable({
 						point:SetAlpha(1)
 					end 
 				end 
-
-				if (point.PostUpdate and point:IsShown()) then 
-					local value = point:GetValue()
-					local min, max = point:GetMinMaxValues()
-
-					point:PostUpdate(value, min, max)
-				end
-
 			end
 		end 
 	end
@@ -377,10 +366,6 @@ ClassPower.ComboPoints = setmetatable({
 
 			local value = min >= i and 1 or 0
 			point:SetValue(value)
-
-			if point.PostUpdate then 
-				point:PostUpdate(value, 0, 1)
-			end 
 		end 
 
 		for i = maxDisplayed+1, #element do 
@@ -504,10 +489,6 @@ ClassPower.Runes = setmetatable({
 				rune:SetMinMaxValues(0, 1)
 				rune:SetValue(1, true)
 
-				if rune.PostUpdate then 
-					rune:PostUpdate(1, 0, 1)
-				end 
-
 				-- update count of available runes
 				min = min + 1
 
@@ -517,9 +498,6 @@ ClassPower.Runes = setmetatable({
 				rune:SetValue(0, true)
 				rune:SetScript("OnUpdate", element.OnUpdateRune)
 
-				if rune.PostUpdate then 
-					rune:PostUpdate(0, 0, duration)
-				end 
 			end
 		end
 
@@ -573,11 +551,6 @@ ClassPower.Runes = setmetatable({
 					if point.bg then 
 						point.bg:SetVertexColor(r*1/3, g*1/3, b*1/3)
 					end 
-					if (point.PostUpdate and point:IsShown()) then 
-						local value = point:GetValue()
-						local min, max = point:GetMinMaxValues()
-						point:PostUpdate(value, min, max)
-					end
 				end
 			end
 
@@ -588,12 +561,6 @@ ClassPower.Runes = setmetatable({
 				if point then
 					point:SetStatusBarColor(r, g, b)
 					point:SetAlpha(0)
-
-					if (point.PostUpdate and point:IsShown()) then 
-						local value = point:GetValue()
-						local min, max = point:GetMinMaxValues()
-						point:PostUpdate(value, min, max)
-					end
 				end 
 			end 
 		end
@@ -651,9 +618,6 @@ ClassPower.SoulShards = setmetatable({
 			end 
 			local value = (i > numActive) and 0 or (min - i + 1)
 			point:SetValue(value)
-			if point.PostUpdate then 
-				point:PostUpdate(value, 0, 1)
-			end 
 		end 
 
 		for i = maxDisplayed+1, #element do 
@@ -717,9 +681,6 @@ ClassPower.Stagger = setmetatable({
 				point:Show()
 			end 
 			point:SetValue(numPoints >= i and 1 or 0)
-			if point.PostUpdate then 
-				point:PostUpdate(value, 0, 1)
-			end 
 		end 
 
 		for i = maxDisplayed + 1, #element do 
@@ -806,11 +767,6 @@ ClassPower.Stagger = setmetatable({
 						point:SetAlpha(1)
 					end 
 				end 
-				if (point.PostUpdate and point:IsShown()) then 
-					local value = point:GetValue()
-					local min, max = point:GetMinMaxValues()
-					point:PostUpdate(value, min, max)
-				end
 			end
 		end 
 	end

@@ -567,6 +567,7 @@ LibWidgetContainer.RegisterElement = function(self, elementName, enableFunc, dis
 		-- Iterate all frames for it
 		for widgetFrame, element in pairs(frameElementsEnabled) do 
 			if (element == elementName) then 
+
 				-- Run the old disable method, 
 				-- to get rid of old events and onupdate handlers.
 				if old.Disable then 
