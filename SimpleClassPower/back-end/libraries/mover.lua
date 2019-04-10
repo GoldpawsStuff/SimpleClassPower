@@ -1,4 +1,4 @@
-local LibMover = CogWheel:Set("LibMover", 4)
+local LibMover = CogWheel:Set("LibMover", 5)
 if (not LibMover) then	
 	return
 end
@@ -39,22 +39,23 @@ LibMover.handles = LibMover.handles or {}
 LibMover.defaults = LibMover.defaults or {}
 
 -- Create the secure master frame
+-- *we're making it secure to allow for modules
+--  using a secure combat movable subsystem.
 if (not LibMover.frame) then
-	LibMover.frame = LibMover:CreateFrame("Frame", nil, "UICenter", "SecureHandlerAttributeTemplate")
+	LibMover.frame = LibMover:CreateFrame("Frame", nil, "UIParent", "SecureHandlerAttributeTemplate")
 else 
+	-- Reset existing versions of the mover frame
 	LibMover.frame:ClearAllPoints()
+
+	-- Remove the visibility driver if it exists, we're not going with this from build 5+. 
 	UnregisterAttributeDriver(LibMover.frame, "state-visibility")
 end 
-
--- Keep it and all its children hidden during combat. 
--- *note that being a child of the UICenter frame, it's also hidden during pet-battles.
-RegisterAttributeDriver(LibMover.frame, "state-visibility", "[combat] hide; show")
 
 -- Speedcuts
 local Parent = LibMover.frame
 local Anchor = LibMover.anchors
 local Content = LibMover.contents
-local Mover = LibMover.movers
+local Movers = LibMover.movers
 local Handle = LibMover.handles
 
 -- Just to easier be able to change things for me.
@@ -104,32 +105,49 @@ end
 -- Parse a position
 local AREA_START = 1/3
 local AREA_END = 2/3
-local parsePosition = function(parentWidth, parentHeight, x, y, bottom, left, top, right)
+
+-- Parse position information 
+local parsePosition = function(parentWidth, parentHeight, x, y, bottomOffset, leftOffset, topOffset, rightOffset)
 	if (y < parentHeight * AREA_START) then 
 		if (x < parentWidth * AREA_START) then 
-			return "BOTTOMLEFT", left, bottom
+			return "BOTTOMLEFT", leftOffset, bottomOffset
 		elseif (x > parentWidth * AREA_END) then 
-			return "BOTTOMRIGHT", right, bottom
+			return "BOTTOMRIGHT", rightOffset, bottomOffset
 		else 
-			return "BOTTOM", x - parentWidth/2, bottom
+			return "BOTTOM", x - parentWidth/2, bottomOffset
 		end 
 	elseif (y > parentHeight * AREA_END) then 
 		if (x < parentWidth * AREA_START) then 
-			return "TOPLEFT", left, top
+			return "TOPLEFT", leftOffset, topOffset
 		elseif x > parentWidth * AREA_END then 
-			return "TOPRIGHT", right, top
+			return "TOPRIGHT", rightOffset, topOffset
 		else 
-			return "TOP", x - parentWidth/2, top
+			return "TOP", x - parentWidth/2, topOffset
 		end 
 	else 
 		if (x < parentWidth * AREA_START) then 
-			return "LEFT", left, y - parentHeight/2
+			return "LEFT", leftOffset, y - parentHeight/2
 		elseif (x > parentWidth * AREA_END) then 
-			return "RIGHT", right, y - parentHeight/2
+			return "RIGHT", rightOffset, y - parentHeight/2
 		else 
 			return "CENTER", x - parentWidth/2, y - parentHeight/2
 		end 
 	end 
+end
+
+-- Get the parsed position of a frame relative to UIParent
+local getParsedPosition = function(frame)
+	local uiW, uiH = UIParent:GetSize()
+
+	-- These points should all be in the UIParent coordinate space, 
+	-- as they take the frame's effective scale into consideration(?)
+	local x, y = frame:GetCenter()
+	local bottom = frame:GetBottom()
+	local left = frame:GetLeft()
+	local top = frame:GetTop() - uiH
+	local right = frame:GetRight() - uiW
+
+	return parsePosition(uiW, uiH, x, y, bottom, left, top, right)
 end
 
 ---------------------------------------------------
@@ -138,58 +156,29 @@ end
 local Mover = LibMover:CreateFrame("Frame")
 local Mover_MT = { __index = Mover }
 
--- Get the parsed position relative to UIParent
-Mover.GetParsedPosition = function(self)
-	local uiW, uiH = UIParent:GetSize()
-	local x, y = self:GetCenter()
-	local bottom = self:GetBottom()
-	local left = self:GetLeft()
-	local top = self:GetTop() - uiH
-	local right = self:GetRight() - uiW
-	return parsePosition(uiW, uiH, x, y, bottom, left, top, right)
+-- Mover Public API
+---------------------------------------------------
+Mover.SetDraggingEnabled = function(self, enableDragging)
+	Movers[Content[self]].enableDragging = enableDragging and true or false
 end
 
-Mover.OnUpdate = function(self, elapsed)
-	local uiW, uiH = UIParent:GetSize()
-	local scale = UIParent:GetScale()
-	local x,y = GetCursorPosition()
-	local realX, realY = x/scale, y/scale
-	local w,h = self:GetSize()
-
-	local bottom = y - h/2
-	local left = x - w/2
-	local top = (y + h/2) - uiH
-	local right = (y + w/2) - uiW
-
-	self:UpdateTexts(parsePosition(uiW, uiH, realX, realY, bottom, left, top, right))
+Mover.SetScalingEnabled = function(self, enableScaling)
+	Movers[Content[self]].enableScaling = enableScaling and true or false
 end
 
-Mover.OnDragStart = function(self) 
-	self:SetScript("OnUpdate", self.OnUpdate)
-	self:StartMoving()
-	self:SetAlpha(ALPHA_DRAGGING)
-	Handle[self]:Show()
+Mover.IsDraggingEnabled = function(self)
+	return Movers[Content[self]].enableDragging
 end
 
-Mover.OnDragStop = function(self) 
-	self:SetScript("OnUpdate", nil)
-	self:StopMovingOrSizing()
-	self:SetAlpha(ALPHA_STOPPED)
+Mover.IsScalingEnabled = function(self)
+	return Movers[Content[self]].enableDragging
+end
 
-	Handle[self]:Hide()
 
-	local rPoint, xOffset, yOffset = self:GetParsedPosition()
-
-	Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
-	Content[self]:Place(rPoint, anchor, rPoint, 0, 0)
-
-	self:UpdateInfoFramePosition()
-	self:UpdateTexts(rPoint, xOffset, yOffset)
-	self:Place(rPoint, xOffset, uOffset)
-end 
-
+-- Mover Internal API
+---------------------------------------------------
 Mover.UpdateInfoFramePosition = function(self)
-	local rPoint, xOffset, yOffset = self:GetParsedPosition()
+	local rPoint, xOffset, yOffset = getParsedPosition(self)
 	if string_find(rPoint, "TOP") then 
 		self.infoFrame:Place("TOP", self, "BOTTOM", 0, -6)
 	else 
@@ -201,7 +190,7 @@ end
 -- as we need to update the parent and position 
 -- of our anchor as well for conistent scaling and size. 
 Mover.OnParentUpdate = function(self)
-	local rPoint, xOffset, yOffset = self:GetParsedPosition()
+	local rPoint, xOffset, yOffset = getParsedPosition(self)
 
 	Anchor[self]:SetParent(Content[self]:GetParent())
 	Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
@@ -209,19 +198,6 @@ Mover.OnParentUpdate = function(self)
 	self:UpdateTexts(rPoint, xOffset, yOffset)
 	self:Place(rPoint, xOffset, uOffset)
 
-end
-
-Mover.OnMouseWheel = function(self, delta)
-	if (delta < 0) then
-		if (self.scale - .1 > .5) then 
-			self.scale = self.scale - .1
-		end 
-	else
-		if (self.scale + .1 < 1.5) then 
-			self.scale = self.scale + .1 
-		end 
-	end
-	self:UpdateScale()
 end
 
 Mover.UpdateTexts = function(self, point, x, y)
@@ -273,25 +249,120 @@ end
 Mover.RestoreDefaultPosition = function(self)
 end
 
+-- Mover Callbacks
+---------------------------------------------------
+-- Called when the mover is created
+Mover.OnCreate = function(self)
+	if self.PostCreate then 
+		return self:PostCreate()
+	end 
+end 
+
+-- Called when the mover is shown
+Mover.OnShow = function(self)
+
+	local parentEffectiveScale = self:GetParent():GetEffectiveScale()
+
+	-- Parse the content's size, scale and position	
+	local content = Content[self]
+	local contentScale = content:GetScale()
+	local contentEffectiveScale = content:GetEffectiveScale()
+	
+	-- Retrieve coordinates relative to UIParent
+	-- These can be used directly for our mover, 
+	-- but must be recalculated using the scalar for the content. 
+	local rPoint, xOffset, yOffset = getParsedPosition(content)
+
+	-- Points must be calculated according to UIParent's scale and size, 
+	-- but multiplied with the scale difference between UIParent and our content frame.
+	local uiEffectiveScale = UIParent:GetEffectiveScale()
+	local uiScale = UIParent:GetScale()
+	local scalar = frameEffectiveScale / uiEffectiveScale
+
+	self:SetScale(contentScale)
+	
+	if self.PostShow then 
+		return self:PostShow(mover)
+	end 
+end 
+
+-- Called when the mouse enters the mover
+Mover.OnEnter = function(self)
+end 
+
+-- Called when them ouse leaves the mover
+Mover.OnLeave = function(self)
+end 
+
+-- Called when the mover is clicked
+Mover.OnClick = function(self, button)
+end 
+
+-- Called when the mousewheel is used above the mover
+Mover.OnMouseWheel = function(self, delta)
+	if (delta < 0) then
+		if (self.scale - .1 > .5) then 
+			self.scale = self.scale - .1
+		end 
+	else
+		if (self.scale + .1 < 1.5) then 
+			self.scale = self.scale + .1 
+		end 
+	end
+	self:UpdateScale()
+end
+
+-- Called when dragging starts
+Mover.OnDragStart = function(self) 
+	self:SetScript("OnUpdate", self.OnUpdate)
+	self:StartMoving()
+	self:SetAlpha(ALPHA_DRAGGING)
+	Handle[self]:Show()
+end
+
+-- Called while the mover is being dragged
+Mover.OnUpdate = function(self, elapsed)
+	local uiW, uiH = UIParent:GetSize()
+	local scale = UIParent:GetScale()
+	local x,y = GetCursorPosition()
+	local realX, realY = x/scale, y/scale
+	local w,h = self:GetSize()
+
+	local bottom = y - h/2
+	local left = x - w/2
+	local top = (y + h/2) - uiH
+	local right = (y + w/2) - uiW
+
+	self:UpdateTexts(parsePosition(uiW, uiH, realX, realY, bottom, left, top, right))
+end
+
+-- Called when dragging stops
+Mover.OnDragStop = function(self) 
+	self:SetScript("OnUpdate", nil)
+	self:StopMovingOrSizing()
+	self:SetAlpha(ALPHA_STOPPED)
+
+	Handle[self]:Hide()
+
+	local rPoint, xOffset, yOffset = getParsedPosition(self)
+
+	Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
+	Content[self]:Place(rPoint, anchor, rPoint, 0, 0)
+
+	self:UpdateInfoFramePosition()
+	self:UpdateTexts(rPoint, xOffset, yOffset)
+	self:Place(rPoint, xOffset, uOffset)
+end 
+
+
 ---------------------------------------------------
 -- Library Event Handling
 ---------------------------------------------------
-LibMover.OnEvent = function(self, event, ...)
-end
-
-LibMover.CreateMover = function(self, target, ...)
+LibMover.CreateMover = function(self, target, styleFunc, ...)
 
 	-- Retrieve the parsed position of the target frame
-	local rPoint, xOffset, yOffset = Mover.GetParsedPosition(target)
+	local rPoint, xOffset, yOffset = getParsedPosition(target)
 	target:ClearAllPoints()
-
-	local parent = target:GetParent()
-
-	-- The movable anchor
-	-- Make our movable anchor unrelated to the frame, 
-	-- but make sure it has the same parent for consistent scales. 
-	local anchor = Parent:CreateFrame("Frame", nil, parent)
-	anchor:SetSize(2,2)
 
 	-- Our overlay drag handle
 	local mover = setmetatable(Parent:CreateFrame("Frame"), DragFrame_MT) 
@@ -317,12 +388,12 @@ LibMover.CreateMover = function(self, target, ...)
 	mover.infoFrame = infoFrame
 
 	local positionText = infoFrame:CreateFontString()
-	positionText:SetFontObject(Private.GetFont(14, true))
+	positionText:SetFontObject(Game15Font_o1)
 	positionText:SetPoint("BOTTOM", infoFrame, "BOTTOM", 0, 2)
 	mover.positionText = positionText
 
 	local scaleText = infoFrame:CreateFontString()
-	scaleText:SetFontObject(Private.GetFont(14, true))
+	scaleText:SetFontObject(Game15Font_o1)
 	scaleText:SetPoint("BOTTOM", positionText, "TOP", 0, 2)
 	mover.scaleText = scaleText
 
@@ -340,15 +411,24 @@ LibMover.CreateMover = function(self, target, ...)
 	handle:SetColorTexture(BACKDROP_COLOR[1], BACKDROP_COLOR[2], BACKDROP_COLOR[3], ALPHA_DRAGGING)
 	handle:SetIgnoreParentAlpha(true)
 
-	mover:UpdateScale()
-
-	Anchor[mover] = anchor
 	Content[mover] = target
 	Handle[mover] = handle
-	Movers[target] = mover
 
-	if self.PostCreateMover then 
-		return self:PostCreateMover(mover)
+	-- Put all mover related data in here
+	Movers[target] = {
+		enableDragging = true, 
+		enableScaling = true
+	}
+
+	mover:OnCreate()
+end
+
+LibMover.OnEvent = function(self, event, ...)
+	if (event == "PLAYER_REGEN_DISABLED") then 
+		-- Forcefully hide all movers upon combat. 
+		for mover in pairs(Content) do 
+			mover:Hide()
+		end 
 	end 
 end
 
