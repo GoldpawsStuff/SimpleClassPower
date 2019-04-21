@@ -94,9 +94,13 @@ end
 
 UnitFramePlayerHUD = {
 
+	-- Default position of the entire frame, 
+	-- will be overridden if the user changes position manually.  
+	Place = { "BOTTOM", "UIParent", "BOTTOM", 0, 340 }, 
+
 	-- These are not the size and places of the actual element, 
 	-- do NOT change these as they are needed for it to function!
-	ClassPowerSize = { 6*70, 70 }, 
+	ClassPowerSize = { 5*70, 70 }, 
 	ClassPowerPlace = { "CENTER", 0, 0 },
 
 	-- Point bars
