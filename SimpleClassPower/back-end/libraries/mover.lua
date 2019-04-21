@@ -1,4 +1,4 @@
-local LibMover = CogWheel:Set("LibMover", 7)
+local LibMover = CogWheel:Set("LibMover", 8)
 if (not LibMover) then	
 	return
 end
@@ -33,11 +33,9 @@ local UIParent = _G.UIParent
 
 -- Library registries
 LibMover.embeds = LibMover.embeds or {}
-LibMover.anchors = LibMover.anchors or {}
-LibMover.contents = LibMover.contents or {}
-LibMover.movers = LibMover.movers or {}
-LibMover.handles = LibMover.handles or {}
-LibMover.defaults = LibMover.defaults or {}
+LibMover.moverData = LibMover.moverData or {} -- data for the movers, not directly exposed. 
+LibMover.moverByTarget = LibMover.moverByTarget or {} -- [target] = mover  
+LibMover.targetByMover = LibMover.targetByMover or {} -- [mover] = target  
 
 -- Create the secure master frame
 -- *we're making it secure to allow for modules
@@ -54,8 +52,9 @@ end
 
 -- Speedcuts
 local Parent = LibMover.frame
-local Content = LibMover.contents
-local Movers = LibMover.movers
+local MoverData = LibMover.moverData
+local MoverByTarget = LibMover.moverByTarget
+local TargetByMover = LibMover.targetByMover 
 
 -- Just to easier be able to change things for me.
 local LABEL, VALUE = "|cffaeaeae", "|cffffd200"
@@ -168,19 +167,35 @@ local Mover_MT = { __index = Mover }
 -- Mover Public API
 ---------------------------------------------------
 Mover.SetDraggingEnabled = function(self, enableDragging)
-	Movers[Content[self]].enableDragging = enableDragging and true or false
+	MoverData[self].enableDragging = enableDragging and true or false
 end
 
 Mover.SetScalingEnabled = function(self, enableScaling)
-	Movers[Content[self]].enableScaling = enableScaling and true or false
+	MoverData[self].enableScaling = enableScaling and true or false
 end
 
 Mover.IsDraggingEnabled = function(self)
-	return Movers[Content[self]].enableDragging
+	return MoverData[self].enableDragging
 end
 
 Mover.IsScalingEnabled = function(self)
-	return Movers[Content[self]].enableDragging
+	return MoverData[self].enableDragging
+end
+
+-- Sets the default position of the mover
+Mover.SetDefaultPosition = function(self, ...)
+end
+
+-- Saves the current position of the mover
+Mover.SavePosition = function(self)
+end
+
+-- Restores the saved position of the mover
+Mover.RestorePosition = function(self)
+end
+
+-- Returns the mover to its default position
+Mover.RestoreDefaultPosition = function(self)
 end
 
 
@@ -201,8 +216,8 @@ end
 Mover.OnParentUpdate = function(self)
 	local rPoint, xOffset, yOffset = getParsedPosition(self)
 
-	Anchor[self]:SetParent(Content[self]:GetParent())
-	Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
+	--Anchor[self]:SetParent(Content[self]:GetParent())
+	--Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
 
 	self:UpdateTexts(rPoint, xOffset, yOffset)
 	self:Place(rPoint, xOffset, uOffset)
@@ -230,33 +245,17 @@ Mover.UpdateScale = function(self)
 		self:PreUpdateScale()
 	end
 
-	Anchor[self]:SetSize(width, height)
-	Content[self]:SetScale(self.scale)
+	--Anchor[self]:SetSize(width, height)
+	--Content[self]:SetScale(self.scale)
 
 	self:SetSize(width, height)
-	self:UpdateTexts(Anchor[self]:GetPoint())
+	--self:UpdateTexts(Anchor[self]:GetPoint())
 
 	if self.PostUpdateScale then 
 		self:PostUpdateScale()
 	end
 	
 end 
-
--- Sets the default position of the mover
-Mover.SetDefaultPosition = function(self, ...)
-end
-
--- Saves the current position of the mover
-Mover.SavePosition = function(self)
-end
-
--- Restores the saved position of the mover
-Mover.RestorePosition = function(self)
-end
-
--- Returns the mover to its default position
-Mover.RestoreDefaultPosition = function(self)
-end
 
 -- Mover Callbacks
 ---------------------------------------------------
@@ -269,11 +268,14 @@ end
 
 -- Called when the mover is shown
 Mover.OnShow = function(self)
+	if self.PreShow then 
+		self:PreShow()
+	end 
 
 	local parentEffectiveScale = self:GetParent():GetEffectiveScale()
 
 	-- Parse the content's size, scale and position	
-	local content = Content[self]
+	local content = TargetByMover[self]
 	local contentScale = content:GetScale()
 	local contentEffectiveScale = content:GetEffectiveScale()
 	
@@ -291,7 +293,7 @@ Mover.OnShow = function(self)
 	self:SetScale(contentScale)
 	
 	if self.PostShow then 
-		return self:PostShow(mover)
+		return self:PostShow()
 	end 
 end 
 
@@ -326,7 +328,7 @@ Mover.OnDragStart = function(self)
 	self:SetScript("OnUpdate", self.OnUpdate)
 	self:StartMoving()
 	self:SetAlpha(ALPHA_DRAGGING)
-	Handle[self]:Show()
+	--Handle[self]:Show()
 end
 
 -- Called while the mover is being dragged
@@ -353,12 +355,12 @@ Mover.OnDragStop = function(self)
 	self:StopMovingOrSizing()
 	self:SetAlpha(ALPHA_STOPPED)
 
-	Handle[self]:Hide()
+	--Handle[self]:Hide()
 
 	local rPoint, xOffset, yOffset = getParsedPosition(self)
 
-	Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
-	Content[self]:Place(rPoint, anchor, rPoint, 0, 0)
+	--Anchor[self]:Place(rPoint, "UIParent", rPoint, xOffset, yOffset)
+	--Content[self]:Place(rPoint, anchor, rPoint, 0, 0)
 
 	self:UpdateInfoFramePosition()
 	self:UpdateTexts(rPoint, xOffset, yOffset)
@@ -387,6 +389,7 @@ LibMover.CreateMover = function(self, target, styleFunc, ...)
 	mover:SetScript("OnDragStart", Mover.OnDragStart)
 	mover:SetScript("OnDragStop", Mover.OnDragStart)
 	mover:SetScript("OnMouseWheel", Mover.OnMouseWheel)
+	mover:SetScript("OnShow", Mover.OnShow)
 	mover:SetScript("OnClick", Mover.OnClick)
 	mover:SetFrameLevel(100)
 	mover:SetBackdrop(BACKDROP)
@@ -417,16 +420,30 @@ LibMover.CreateMover = function(self, target, styleFunc, ...)
 	
 	-- An overlay visible on the cursor while dragging the movable frame
 	local handle = mover:CreateTexture()
-	handle:Hide()
 	handle:SetDrawLayer("ARTWORK")
-	handle:SetAllPoints(frame)
+	handle:SetAllPoints()
 	handle:SetColorTexture(BACKDROP_COLOR[1], BACKDROP_COLOR[2], BACKDROP_COLOR[3], ALPHA_DRAGGING)
 	handle:SetIgnoreParentAlpha(true)
 
-	Content[target] = mover
+	if styleFunc then 
+		-- Alllow modules to use methods as styling functions. 
+		if (type(styleFunc) == "string") then 
+			local func = self[styleFunc]
+			if func then 
+				func(self, frame, frame.unit, frame.id, ...) 
+			end 
+		elseif (type(styleFunc) == "function") then 
+			styleFunc(frame, frame.unit, frame.id, ...) 
+		end 
+	end 
+
+	-- Store the references
+	MoverByTarget[target] = mover
+	TargetByMover[mover] = target
 
 	-- Put all mover related data in here
-	Movers[target] = {
+	-- This is how movers data always be referenced: 
+	MoverData[mover] = {
 		enableDragging = true, 
 		enableScaling = true
 	}
@@ -438,28 +455,28 @@ LibMover.LockMover = function(self, target)
 	if (InCombatLockdown()) then 
 		return 
 	end 
-	Content[target]:Hide()
+	MoverByTarget[target]:Hide()
 end 
 
 LibMover.UnlockMover = function(self, target)
 	if (InCombatLockdown()) then 
 		return 
 	end 
-	Content[target]:Show()
+	MoverByTarget[target]:Show()
 end 
 
 LibMover.ToggleMover = function(self, target)
 	if (InCombatLockdown()) then 
 		return 
 	end 
-	Content[target]:SetShown(not Content[target]:IsShown())
+	MoverByTarget[target]:SetShown(not MoverByTarget[target]:IsShown())
 end 
 
 LibMover.LockAllMovers = function(self)
 	if (InCombatLockdown()) then 
 		return 
 	end 
-	for target,mover in pairs(Content) do 
+	for target,mover in pairs(MoverByTarget) do 
 		mover:Hide()
 	end 
 end 
@@ -468,7 +485,7 @@ LibMover.UnlockAllMovers = function(self)
 	if (InCombatLockdown()) then 
 		return 
 	end 
-	for target,mover in pairs(Content) do 
+	for target,mover in pairs(MoverByTarget) do 
 		mover:Show()
 	end 
 end 
@@ -480,7 +497,7 @@ LibMover.ToggleAllMovers = function(self)
 	-- Make this a hard show/hide method, 
 	-- don't mix visible and hidden. 
 	local visible
-	for target,mover in pairs(Content) do 
+	for target,mover in pairs(MoverByTarget) do 
 		if mover:IsShown() then 
 			-- A mover is visible, 
 			-- so this is a hide event. 
