@@ -1,4 +1,4 @@
-local LibMover = CogWheel:Set("LibMover", 5)
+local LibMover = CogWheel:Set("LibMover", 7)
 if (not LibMover) then	
 	return
 end
@@ -26,6 +26,7 @@ local type = type
 
 -- WoW API
 local GetCursorPosition = _G.GetCursorPosition
+local InCombatLockdown = _G.InCombatLockdown
 
 -- WoW Frames
 local UIParent = _G.UIParent
@@ -53,10 +54,8 @@ end
 
 -- Speedcuts
 local Parent = LibMover.frame
-local Anchor = LibMover.anchors
 local Content = LibMover.contents
 local Movers = LibMover.movers
-local Handle = LibMover.handles
 
 -- Just to easier be able to change things for me.
 local LABEL, VALUE = "|cffaeaeae", "|cffffd200"
@@ -163,7 +162,7 @@ end
 ---------------------------------------------------
 -- Mover Template
 ---------------------------------------------------
-local Mover = LibMover:CreateFrame("Frame")
+local Mover = LibMover:CreateFrame("Button")
 local Mover_MT = { __index = Mover }
 
 -- Mover Public API
@@ -378,7 +377,7 @@ LibMover.CreateMover = function(self, target, styleFunc, ...)
 	target:ClearAllPoints()
 
 	-- Our overlay drag handle
-	local mover = setmetatable(Parent:CreateFrame("Frame"), DragFrame_MT) 
+	local mover = setmetatable(Parent:CreateFrame("Button"), Mover_MT) 
 	mover:SetFrameStrata("DIALOG")
 	mover:EnableMouse(true)
 	mover:EnableMouseWheel(true)
@@ -424,8 +423,7 @@ LibMover.CreateMover = function(self, target, styleFunc, ...)
 	handle:SetColorTexture(BACKDROP_COLOR[1], BACKDROP_COLOR[2], BACKDROP_COLOR[3], ALPHA_DRAGGING)
 	handle:SetIgnoreParentAlpha(true)
 
-	Content[mover] = target
-	Handle[mover] = handle
+	Content[target] = mover
 
 	-- Put all mover related data in here
 	Movers[target] = {
@@ -436,12 +434,71 @@ LibMover.CreateMover = function(self, target, styleFunc, ...)
 	mover:OnCreate()
 end
 
+LibMover.LockMover = function(self, target)
+	if (InCombatLockdown()) then 
+		return 
+	end 
+	Content[target]:Hide()
+end 
+
+LibMover.UnlockMover = function(self, target)
+	if (InCombatLockdown()) then 
+		return 
+	end 
+	Content[target]:Show()
+end 
+
+LibMover.ToggleMover = function(self, target)
+	if (InCombatLockdown()) then 
+		return 
+	end 
+	Content[target]:SetShown(not Content[target]:IsShown())
+end 
+
+LibMover.LockAllMovers = function(self)
+	if (InCombatLockdown()) then 
+		return 
+	end 
+	for target,mover in pairs(Content) do 
+		mover:Hide()
+	end 
+end 
+
+LibMover.UnlockAllMovers = function(self)
+	if (InCombatLockdown()) then 
+		return 
+	end 
+	for target,mover in pairs(Content) do 
+		mover:Show()
+	end 
+end 
+
+LibMover.ToggleAllMovers = function(self)
+	if (InCombatLockdown()) then 
+		return 
+	end 
+	-- Make this a hard show/hide method, 
+	-- don't mix visible and hidden. 
+	local visible
+	for target,mover in pairs(Content) do 
+		if mover:IsShown() then 
+			-- A mover is visible, 
+			-- so this is a hide event. 
+			visible = true
+			break 
+		end
+	end 
+	if (visible) then 
+		self:LockAllMovers()
+	else 
+		self:UnlockAllMovers()
+	end 
+end 
+
 LibMover.OnEvent = function(self, event, ...)
 	if (event == "PLAYER_REGEN_DISABLED") then 
 		-- Forcefully hide all movers upon combat. 
-		for mover in pairs(Content) do 
-			mover:Hide()
-		end 
+		self:LockAllMovers()
 	end 
 end
 
@@ -450,7 +507,13 @@ LibMover:UnregisterAllEvents()
 LibMover:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEvent")
 
 local embedMethods = {
-	CreateMover = true
+	CreateMover = true,
+	LockMover = true, 
+	LockAllMovers = true, 
+	UnlockMover = true,
+	UnlockAllMovers = true, 
+	ToggleMover = true, 
+	ToggleAllMovers = true
 }
 
 LibMover.Embed = function(self, target)
