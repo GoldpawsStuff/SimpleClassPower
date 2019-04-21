@@ -159,8 +159,8 @@ local Style = function(self, unit, id, layout, ...)
 
 end
 
-local StyleProxy = function(self, unit, id, _, ...)
-	return Style(self, unit, id, Module.layout, ...)
+Module.Style = function(self, frame, unit, id, _, ...)
+	return Style(frame, unit, id, self.layout, ...)
 end
 
 Module.ToggleConfigWindow = function(self)
@@ -228,7 +228,7 @@ Module.OnInit = function(self)
 	---------------------------------------------------------------------
 	-- The main frame, this is a secure unitframe, 
 	-- though have no mouse interaction. 
-	local frame = self:SpawnUnitFrame("player", "UICenter", StyleProxy)
+	local frame = self:SpawnUnitFrame("player", "UICenter", "Style")
 	frame:Place(unpack(self.db.savedPosition or self.layout.Place))
 	self:CreateMover(frame) -- Make it movable!
 	self.frame = frame
