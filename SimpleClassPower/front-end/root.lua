@@ -61,6 +61,9 @@ local deprecated = {
 	showAlways = true 
 }
 
+---------------------------------------------------
+-- Styling
+---------------------------------------------------
 local Style = function(self, unit, id, layout, ...)
 
 	-- Assign our own global custom colors
@@ -235,8 +238,11 @@ Module.OnInit = function(self)
 	-- though have no mouse interaction. 
 	local frame = self:SpawnUnitFrame("player", "UICenter", "Style")
 	frame:Place(unpack(self.db.savedPosition or self.layout.Place))
-	self:CreateMover(frame) -- Make it movable!
 	self.frame = frame
+	
+	local mover = self:CreateMover(frame) -- Make it movable!
+	mover:SetName(ADDON)
+	self.mover = mover 
 
 	-- Register a chat command to toggle the config window
 	---------------------------------------------------------------------
