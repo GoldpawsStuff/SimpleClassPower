@@ -31,7 +31,8 @@ local _,PlayerClass = UnitClass("player")
 -- Changing these have no real effect in-game, so don't. 
 local defaults = {
 	enableClassColor = false, -- use class color instead of our power colors
-	showAlways = false, -- don't hide without a target, always show (though at lower opacity)
+	hideWhenNoTarget = false, -- hide when no target exists
+	hideWhenUnattackable = false -- hiden when target is unattackable
 }
 
 -- Various options I've used in the development cycle, 
@@ -53,7 +54,11 @@ local deprecated = {
 	enableHolyPower = true, 
 	enableRunes = true, 
 	enableSoulShards = true, 
-	enableStagger = true
+	enableStagger = true, 
+
+	-- I removed this beacuse I'm doing it the opposite way, 
+	-- making it always visible by default.
+	showAlways = true 
 }
 
 local Style = function(self, unit, id, layout, ...)
@@ -95,17 +100,17 @@ local Style = function(self, unit, id, layout, ...)
 	classPower:SetSize(unpack(layout.ClassPowerSize)) -- minimum size, this is really just an anchor
 	classPower:SetPoint(unpack(layout.ClassPowerPlace)) 
 
-	-- Only show it on hostile targets
-	classPower.hideWhenUnattackable = layout.ClassPowerHideWhenUnattackable
-
 	-- Maximum points displayed regardless 
 	-- of max value and available point frames.
 	-- This does not affect runes, which still require 6 frames.
 	classPower.maxComboPoints = layout.ClassPowerMaxComboPoints
 
+	-- Only show it on hostile targets
+	classPower.hideWhenUnattackable = Module.db.hideWhenUnattackable --layout.ClassPowerHideWhenUnattackable
+
 	-- Set the point alpha to 0 when no target is selected
 	-- This does not affect runes 
-	classPower.hideWhenNoTarget = layout.ClassPowerHideWhenNoTarget 
+	classPower.hideWhenNoTarget = Module.db.hideWhenNoTarget -- layout.ClassPowerHideWhenNoTarget 
 
 	-- Set all point alpha to 0 when we have no active points
 	-- This does not affect runes 

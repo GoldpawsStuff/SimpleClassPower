@@ -124,8 +124,8 @@ UnitFramePlayerHUD = {
 
 	-- Visibility and sorting
 	ClassPowerMaxComboPoints = 5, -- maximum displayed points (does not affect runes)
-	ClassPowerHideWhenNoTarget = true, -- hide the element when no target is selected
-	ClassPowerHideWhenUnattackable = true, -- hide the element when the target can't be attacked
+	--ClassPowerHideWhenNoTarget = false, -- hide the element when no target is selected
+	--ClassPowerHideWhenUnattackable = false, -- hide the element when the target can't be attacked
 	ClassPowerAlphaWhenEmpty = .5, -- alpha of empty points
 	ClassPowerAlphaWhenOutOfCombat = .5, -- alpha multiplier of all points when not in combat
 	ClassPowerAlphaWhenOutOfCombatRunes = .5, -- alpha multiplier of all runes when not in combat
