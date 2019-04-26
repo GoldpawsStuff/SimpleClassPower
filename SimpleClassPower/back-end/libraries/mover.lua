@@ -1,4 +1,4 @@
-local LibMover = CogWheel:Set("LibMover", 15)
+local LibMover = CogWheel:Set("LibMover", 16)
 if (not LibMover) then	
 	return
 end
@@ -319,12 +319,32 @@ Mover.UpdateTexts = function(self, point, x, y)
 end
 
 Mover.UpdateScale = function(self)
-	--local width = self.realWidth * self.scale
-	--local height = self.realHeight * self.scale
-
 	if self.PreUpdateScale then 
 		self:PreUpdateScale()
 	end
+
+	local data = MoverData[self]
+
+	-- Rescale the target according to the stored setting
+	local target = TargetByMover[self]
+	target:SetScale(data.scale)
+
+	-- Glue the target to the mover position, 
+	-- as rescaling is bound to have changed it. 
+	local point, offsetX, offsetY = getParsedPosition(self)
+	target:Place(point, self, point, 0, 0)
+
+	-- Parse the current target position and reposition it
+	-- Strictly speaking we could've math'ed this. But this is easier. 
+	local targetPoint, targetOffsetX, targetOffsetY = getParsedPosition(target)
+	target:Place(targetPoint, "UICenter", targetPoint, targetOffsetX, targetOffsetY)
+
+	-- Resize and reposition the mover frame. 
+	local targetWidth, targetHeight = target:GetSize()
+	local relativeScale = target:GetEffectiveScale() / self:GetEffectiveScale()
+
+	self:SetSize(targetWidth*relativeScale, targetHeight*relativeScale)
+	self:Place(data.point, "UICenter", data.point, data.offsetX, data.offsetY)
 
 	--Anchor[self]:SetSize(width, height)
 	--Content[self]:SetScale(self.scale)
@@ -484,19 +504,17 @@ Mover.OnDragStop = function(self)
 	self:StopMovingOrSizing()
 	self:SetAlpha(ALPHA_STOPPED)
 
-	-- We need to parse our own position first
-	local point, offsetX, offsetY = getParsedPosition(self)
-
-	-- Correct the x,y values for the target
+	-- Glue the target to the new mover position
 	local target = TargetByMover[self]
-	local targetScale = target:GetEffectiveScale()
-	local moverScale = self:GetEffectiveScale()
-	offsetX = offsetX/moverScale*targetScale
-	offsetY = offsetY/moverScale*targetScale
+	local point, offsetX, offsetY = getParsedPosition(self)
+	target:Place(point, self, point, 0, 0)
 
-	-- Reposition the target relative to the ui 
-	target:Place(point, "UICenter", point, offsetX, offsetY)
+	-- Parse the current target position and reposition it
+	-- Strictly speaking we could've math'ed this. But this is easier. 
+	local targetPoint, targetOffsetX, targetOffsetY = getParsedPosition(target)
+	target:Place(targetPoint, "UICenter", targetPoint, targetOffsetX, targetOffsetY)
 
+	-- Store it. They are equal. 
 	MoverData[self].point = point
 	MoverData[self].offsetX = offsetX
 	MoverData[self].offsetY = offsetY
@@ -566,13 +584,13 @@ LibMover.CreateMover = function(self, target, template, ...)
 
 	-- Retrieve the parsed position of the target frame,
 	-- and scale, size and position the mover frame accordingly. 
-	local targetPoint, targetXOffset, targetYOffset = getParsedPosition(target)
+	local targetPoint, targetOffsetX, targetOffsetY = getParsedPosition(target)
 	local targetWidth, targetHeight = target:GetSize()
-	local targetScale = target:GetEffectiveScale()
-	local moverScale = mover:GetEffectiveScale()
-	local scalar = targetScale/moverScale
-	mover:SetSize(targetWidth*scalar, targetHeight*scalar)
-	mover:Place(targetPoint, "UICenter", targetPoint, targetXOffset, targetYOffset)
+	local targetEffectiveScale = target:GetEffectiveScale()
+	local moverEffectiveScale = mover:GetEffectiveScale()
+	local scale = target:GetScale()
+	mover:SetSize(targetWidth*targetEffectiveScale/moverEffectiveScale, targetHeight*targetEffectiveScale/moverEffectiveScale)
+	mover:Place(targetPoint, "UICenter", targetPoint, targetOffsetX, targetOffsetY)
 	
 	local infoFrame = mover:CreateFrame("Frame")
 	infoFrame:SetSize(2,2)
@@ -626,16 +644,16 @@ LibMover.CreateMover = function(self, target, template, ...)
 		enableDragging = true, 
 		enableScaling = true,
 		point = targetPoint, 
-		offsetX = targetXOffset, 
-		offsetY = targetYOffset,
-		scale = scalar,
+		offsetX = targetOffsetX, 
+		offsetY = targetOffsetY,
+		scale = scale,
 		scaleStep = .1, 
 		minScale = .5, 
 		maxScale = 1.5,
 		defaultScale = 1,
 		defaultPoint = targetPoint, 
-		defaultOffsetX = targetXOffset,
-		defaultOffsetY = targetYOffset
+		defaultOffsetX = targetOffsetX,
+		defaultOffsetY = targetOffsetY
 	}
 
 	LibMover:SendMessage("CG_MOVER_CREATED", mover, target)
