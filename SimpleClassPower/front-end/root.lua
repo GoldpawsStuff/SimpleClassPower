@@ -32,8 +32,7 @@ local _,PlayerClass = UnitClass("player")
 -- Changing these have no real effect in-game, so don't. 
 local defaults = {
 	enableClassColor = false, -- use class color instead of our power colors
-	hideWhenNoTarget = false, -- hide when no target exists
-	hideWhenUnattackable = false -- hiden when target is unattackable
+	enableSmartVisibility = false -- hide when no target or unattackable
 }
 
 -- Various options I've used in the development cycle, 
@@ -59,11 +58,40 @@ local deprecated = {
 
 	-- I removed this beacuse I'm doing it the opposite way, 
 	-- making it always visible by default.
-	showAlways = true 
+	showAlways = true, 
+
+	-- Removed this to simplify it to a single option
+	hideWhenNoTarget = false, -- hide when no target exists
+	hideWhenUnattackable = false -- hiden when target is unattackable
 }
 
 ---------------------------------------------------
--- Styling
+-- Additional Mover Methods
+---------------------------------------------------
+local Mover = {}
+
+Mover.OnEnter = function(self)
+	local colors = Private.Colors
+	local tooltip = self:GetTooltip()
+	local bottom = self:GetBottom() 
+	local top = Module:GetFrame("UICenter"):GetHeight() - self:GetTop()
+	local point = ((bottom < top) and "BOTTOM" or "TOP")
+	local rPoint = ((bottom < top) and "TOP" or "BOTTOM")
+	local offset = (bottom < top) and 20 or -20
+	
+	tooltip:SetOwner(self, "ANCHOR_NONE")
+	tooltip:Place(point, self, rPoint, 0, offset)
+	tooltip:SetMinimumWidth(280)
+	tooltip:AddLine(ADDON, colors.title[1], colors.title[2], colors.title[3])
+	--tooltip:AddLine(L["<Left-Click> to raise"], colors.green[1], colors.green[2], colors.green[3])
+	--tooltip:AddLine(L["<Left-Click> to lower"], colors.green[1], colors.green[2], colors.green[3])
+	tooltip:AddLine(L["<Shift Left Click> to reset position"], colors.green[1], colors.green[2], colors.green[3])
+	tooltip:AddLine(L["<Shift Right Click> to reset scale"], colors.green[1], colors.green[2], colors.green[3])
+	tooltip:Show()
+end
+
+---------------------------------------------------
+-- Class Resource Styling
 ---------------------------------------------------
 local Style = function(self, unit, id, layout, ...)
 
@@ -107,38 +135,18 @@ local Style = function(self, unit, id, layout, ...)
 	classPower:SetSize(unpack(layout.ClassPowerSize)) -- minimum size, this is really just an anchor
 	classPower:SetPoint(unpack(layout.ClassPowerPlace)) 
 
-	-- Apply class coloring to the resource points
+	-- User configurable settings
 	classPower.colorClass = db.enableClassColor
+	classPower.hideWhenUnattackable = db.enableSmartVisibility 
+	classPower.hideWhenNoTarget = db.enableSmartVisibility 
+	classPower.hideWhenEmpty = db.enableSmartVisibility
 
-	-- Maximum points displayed regardless 
-	-- of max value and available point frames.
-	-- This does not affect runes, which still require 6 frames.
-	classPower.maxComboPoints = layout.ClassPowerMaxComboPoints
-
-	-- Only show it on hostile targets
-	classPower.hideWhenUnattackable = db.hideWhenUnattackable 
-
-	-- Set the point alpha to 0 when no target is selected
-	-- This does not affect runes 
-	classPower.hideWhenNoTarget = db.hideWhenNoTarget 
-
-	-- Set all point alpha to 0 when we have no active points
-	-- This does not affect runes 
-	classPower.hideWhenEmpty = layout.ClassPowerHideWhenNoTarget
-
-	-- Alpha modifier of inactive/not ready points
+	-- Addon chosen settings
 	classPower.alphaEmpty = layout.ClassPowerAlphaWhenEmpty 
-
-	-- Alpha modifier when not engaged in combat
-	-- This is applied on top of the inactive modifier above
 	classPower.alphaNoCombat = layout.ClassPowerAlphaWhenOutOfCombat
 	classPower.alphaNoCombatRunes = layout.ClassPowerAlphaWhenOutOfCombatRunes
-
-	-- Set to true to flip the classPower horizontally
-	-- Intended to be used alongside actioncam
 	classPower.flipSide = layout.ClassPowerReverseSides 
-
-	-- Sort order of the runes
+	classPower.maxComboPoints = layout.ClassPowerMaxComboPoints
 	classPower.runeSortOrder = layout.ClassPowerRuneSortOrder 
 
 	-- Creating 6 frames since runes require it
@@ -178,6 +186,9 @@ Module.Style = function(self, frame, unit, id, _, ...)
 	return Style(frame, unit, id, self.layout, ...)
 end
 
+---------------------------------------------------
+-- Module Callbacks
+---------------------------------------------------
 Module.ParseSavedSettings = function(self)
 	local db = self:NewConfig("Core", defaults, "global")
 	for key in pairs(deprecated) do 
@@ -192,12 +203,17 @@ Module.PostUpdateSettings = function(self)
 	local db = self.db
 	local element = self.frame.ClassPower
 
+	self.frame:DisableElement("ClassPower")
+
 	-- Update frame element switches
-	element.hideWhenUnattackable = db.hideWhenUnattackable
-	element.hideWhenNoTarget = db.hideWhenNoTarget 
+	element.hideWhenUnattackable = db.enableSmartVisibility
+	element.hideWhenNoTarget = db.enableSmartVisibility 
+	element.hideWhenEmpty = db.enableSmartVisibility
 	element.colorClass = db.enableClassColor
 
 	-- Force an update to apply new settings
+	self.frame:EnableElement("ClassPower")
+
 	element:ForceUpdate()
 end
 
@@ -227,17 +243,9 @@ Module.OnChatCommand = function(self, editBox, ...)
 		end
 
 	elseif (cmd == "show") then 
-		local hideWhenUnattackable = db.hideWhenUnattackable
-		local hideWhenNoTarget = db.hideWhenNoTarget
-		if (arg == "smart") then 
-			db.hideWhenUnattackable = true 
-			db.hideWhenNoTarget = true
-
-		elseif (arg == "always") or (not arg) then 
-			db.hideWhenNoTarget = false
-			db.hideWhenUnattackable = false
-		end 
-		if (hideWhenNoTarget ~= db.hideWhenNoTarget) or (hideWhenUnattackable ~= db.hideWhenUnattackable) then 
+		local enableSmartVisibility = db.enableSmartVisibility
+		db.enableSmartVisibility = (arg == "smart") and true or false 
+		if (enableSmartVisibility ~= db.enableSmartVisibility) then 
 			self:PostUpdateSettings()
 		end
 	elseif (cmd == "lock") then 
@@ -256,6 +264,9 @@ Module.OnChatCommand = function(self, editBox, ...)
 	end 
 end
 
+---------------------------------------------------
+-- Module Initialization
+---------------------------------------------------
 Module.OnInit = function(self)
 	self.db = self:ParseSavedSettings() 
 
@@ -270,9 +281,13 @@ Module.OnInit = function(self)
 	frame:Place(unpack(self.db.savedPosition or self.layout.Place))
 	self.frame = frame
 	
-	local mover = self:CreateMover(frame) -- Make it movable!
+	-- Make it movable!
+	local mover = self:CreateMover(frame) 
 	mover:SetName(ADDON)
 	mover:SetDefaultPosition(unpack(self.layout.Place))
+	for name,method in pairs(Mover) do 
+		mover[name] = method
+	end 
 	self.mover = mover 
 
 	-- Register a chat command to toggle the config window
