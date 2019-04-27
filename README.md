@@ -29,6 +29,8 @@ Type **/scp** to open the options window!
 
 ## Planned, but unreleased features
 * Multiple texture choices
+* Custom resource colors
+* Remember different setups based on enabled UI addons (like DiabolicUI, AzeriteUI etc)
 
 ### **Pledge to our work:**  
 * Patreon: [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui)  
