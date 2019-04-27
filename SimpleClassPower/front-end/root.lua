@@ -1,5 +1,5 @@
 local ADDON, Private = ...
-local Module = CogWheel("LibModule"):NewModule(ADDON, "LibDB", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
+local Module = CogWheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
 
 -- Tell the back-end what addon to look for before 
 -- initializing this module and all its submodules. 
@@ -185,13 +185,11 @@ Module.ParseSavedSettings = function(self)
 end
 
 Module.OnEvent = function(self, event, ...)
-	if (event == "PLAYER_REGEN_DISABLED") then 
-		-- hide any visible anchors 
-
-
-	elseif (event == "PLAYER_REGEN_ENABLED") then 
-		-- show anchors if they were hidden because of combat 
-
+	if (event == "CG_MOVER_UPDATED") then 
+		local mover, target, point, offsetX, offsetY = ...
+		if (mover == self.mover) and (target == self.frame) then 
+			self.db.savedPosition = { point, "UICenter", point, offsetX, offsetY }
+		end 
 	elseif (event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD") then 
 		NUMPOINTS = PlayerClass == "DEATHKNIGHT" and 6 or (PlayerClass == "MONK" and GetSpecialization() == SPEC_MONK_BREWMASTER) or 5
 	end
@@ -242,6 +240,7 @@ Module.OnInit = function(self)
 	
 	local mover = self:CreateMover(frame) -- Make it movable!
 	mover:SetName(ADDON)
+	mover:SetDefaultPosition(unpack(self.layout.Place))
 	self.mover = mover 
 
 	-- Register a chat command to toggle the config window
@@ -251,12 +250,11 @@ Module.OnInit = function(self)
 end 
 
 Module.OnEnable = function(self)
+	self:RegisterMessage("CG_MOVER_UPDATED", "OnEvent")
 	if (PlayerClass == "MONK") then 
 		self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent") 
 		self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent") 
-
 	elseif (PlayerClass == "DEATHKNIGHT") then 
 		self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent") 
-
 	end 
 end 
