@@ -1,28 +1,9 @@
 local ADDON = ...
 local L = CogWheel("LibLocale"):NewLocale(ADDON, "enUS", true)
 
--- General Stuff
---------------------------------------------
-L["Enable"] = true 
-L["Disable"] = true 
-L["Enabled"] = "|cff00aa00Enabled|r"
-L["Disabled"] = "|cffff0000Disabled|r"
-
-L["Position"] = true
-L["While this window is open, you can drag the anchor around the screen, nudge it with the buttons, or even enter a manual position in the input boxes below."] = true
-
-L["Scale"] = true 
-L["Set the scale of resource points."] = true
-
-L["Color Scheme"] = true 
-L["Here you can select how you wish the resource points to be colored."] = true
-
-L["Power Colors"] = true 
-L["Color the resource points according to the resource type. This is the default setting."] = true
-
-L["Class Colors"] = true 
-L["Color the resource points according to your class."] = true 
-
-L["Custom Color"] = true
-L["Color the resource points in your own manually set color."] = true
-
+L["/scp - Toggle the overlay for moving/scaling."] = "|cffa365ee/scp|r - Toggle the overlay for moving/scaling."
+L["/scp classcolor on - Enable class colors."] = "|cffa365ee/scp classcolor on|r - Enable class colors."
+L["/scp classcolor off - Disable class colors."] = "|cffa365ee/scp classcolor off|r - Disable class colors. |cff888888(default)|r"
+L["/scp show always - Always show."] = "|cffa365ee/scp show always|r - Always show. |cff888888(default)|r"
+L["/scp show smart - Hide when no target or unattackable."] = "|cffa365ee/scp show smart|r - Hide when no target or unattackable."
+L["/scp help - Show this."] = "|cffa365ee/scp help|r - Show this."
