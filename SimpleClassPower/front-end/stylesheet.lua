@@ -96,7 +96,7 @@ UnitFramePlayerHUD = {
 
 	-- Default position of the entire frame, 
 	-- will be overridden if the user changes position manually.  
-	Place = { "BOTTOM", "UIParent", "BOTTOM", 0, 340 }, 
+	Place = { "BOTTOM", "UICenter", "BOTTOM", 0, 300 }, 
 
 	-- These are not the size and places of the actual element, 
 	-- do NOT change these as they are needed for it to function!
