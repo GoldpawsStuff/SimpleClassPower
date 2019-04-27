@@ -1,4 +1,5 @@
 local ADDON, Private = ...
+local L = CogWheel("LibLocale"):GetLocale(ADDON)
 local Module = CogWheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
 
 -- Tell the back-end what addon to look for before 
@@ -66,6 +67,9 @@ local deprecated = {
 ---------------------------------------------------
 local Style = function(self, unit, id, layout, ...)
 
+	-- Get the saved settings
+	local db = Module.db
+
 	-- Assign our own global custom colors
 	self.colors = Private.Colors
 	self.layout = layout
@@ -103,17 +107,20 @@ local Style = function(self, unit, id, layout, ...)
 	classPower:SetSize(unpack(layout.ClassPowerSize)) -- minimum size, this is really just an anchor
 	classPower:SetPoint(unpack(layout.ClassPowerPlace)) 
 
+	-- Apply class coloring to the resource points
+	classPower.colorClass = db.enableClassColor
+
 	-- Maximum points displayed regardless 
 	-- of max value and available point frames.
 	-- This does not affect runes, which still require 6 frames.
 	classPower.maxComboPoints = layout.ClassPowerMaxComboPoints
 
 	-- Only show it on hostile targets
-	classPower.hideWhenUnattackable = Module.db.hideWhenUnattackable --layout.ClassPowerHideWhenUnattackable
+	classPower.hideWhenUnattackable = db.hideWhenUnattackable 
 
 	-- Set the point alpha to 0 when no target is selected
 	-- This does not affect runes 
-	classPower.hideWhenNoTarget = Module.db.hideWhenNoTarget -- layout.ClassPowerHideWhenNoTarget 
+	classPower.hideWhenNoTarget = db.hideWhenNoTarget 
 
 	-- Set all point alpha to 0 when we have no active points
 	-- This does not affect runes 
@@ -171,9 +178,6 @@ Module.Style = function(self, frame, unit, id, _, ...)
 	return Style(frame, unit, id, self.layout, ...)
 end
 
-Module.ToggleConfigWindow = function(self)
-end
-
 Module.ParseSavedSettings = function(self)
 	local db = self:NewConfig("Core", defaults, "global")
 	for key in pairs(deprecated) do 
@@ -182,6 +186,19 @@ Module.ParseSavedSettings = function(self)
 		end
 	end
 	return db
+end
+
+Module.PostUpdateSettings = function(self)
+	local db = self.db
+	local element = self.frame.ClassPower
+
+	-- Update frame element switches
+	element.hideWhenUnattackable = db.hideWhenUnattackable
+	element.hideWhenNoTarget = db.hideWhenNoTarget 
+	element.colorClass = db.enableClassColor
+
+	-- Force an update to apply new settings
+	element:ForceUpdate()
 end
 
 Module.OnEvent = function(self, event, ...)
@@ -196,30 +213,45 @@ Module.OnEvent = function(self, event, ...)
 end
 
 Module.OnChatCommand = function(self, editBox, ...)
+	local db = self.db
 	local cmd, arg = ...
 	if (cmd == "classcolor") then 
+		local enableClassColor = db.enableClassColor
 		if (arg == "on") or (arg == "enable") then 
-			self.db.enableClassColor = true 
-
+			db.enableClassColor = true 
 		elseif (arg == "off") or (arg == "disable") or (not arg) then
-			self.db.enableClassColor = false
+			db.enableClassColor = false
 		end 
+		if (enableClassColor ~= db.enableClassColor) then 
+			self:PostUpdateSettings()
+		end
 
 	elseif (cmd == "show") then 
-		if (arg == "always") then 
-			self.db.showAlways = true 
+		local hideWhenUnattackable = db.hideWhenUnattackable
+		local hideWhenNoTarget = db.hideWhenNoTarget
+		if (arg == "smart") then 
+			db.hideWhenUnattackable = true 
+			db.hideWhenNoTarget = true
 
-		elseif (arg == "smart") or (not arg) then 
-			self.db.showAlways = false
+		elseif (arg == "always") or (not arg) then 
+			db.hideWhenNoTarget = false
+			db.hideWhenUnattackable = false
 		end 
-
+		if (hideWhenNoTarget ~= db.hideWhenNoTarget) or (hideWhenUnattackable ~= db.hideWhenUnattackable) then 
+			self:PostUpdateSettings()
+		end
 	elseif (cmd == "lock") then 
 		self:LockMover(self.frame)
-
 	elseif (cmd == "unlock") then 
 		self:UnlockMover(self.frame)
+	elseif (cmd == "help") then 
+		print(L["/scp - Toggle the overlay for moving/scaling."])
+		print(L["/scp classcolor on - Enable class colors."])
+		print(L["/scp classcolor off - Disable class colors."])
+		print(L["/scp show always - Always show."])
+		print(L["/scp show smart - Hide when no target or unattackable."])
+		print(L["/scp help - Show this."])
 	else 
-		-- assume lock toggle when no arguments is given
 		self:ToggleMover(self.frame) 
 	end 
 end
