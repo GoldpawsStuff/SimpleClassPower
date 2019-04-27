@@ -79,6 +79,8 @@ colorDB.normal = createColor(229/255, 178/255, 38/255)
 colorDB.highlight = createColor(250/255, 250/255, 250/255)
 colorDB.title = createColor(255/255, 234/255, 137/255)
 colorDB.offwhite = createColor(196/255, 196/255, 196/255)
+colorDB.green = createColor( 25/255, 178/255, 25/255 )
+colorDB.red = createColor( 204/255, 25/255, 25/255 )
 
 -- Unit Class Coloring
 -- Original colors at https://wow.gamepedia.com/Class#Class_colors
