@@ -4,14 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [2.0.7-RC] 2019-04-27
+## [2.0.7-Release] 2019-04-27
 New release with a new back-end and upgraded features!
 
 ### Changed
 - The entire back-end is new. We're now basing this on the same libraries as used in AzeriteUI and the upcoming GoldpawUI6 and DiabolicUI2. It's more solid than what was before, and far easier to work with and update when we use the same core for multiple projects. What benefits one benefits all. Time saved, features gained! Wohoo! :) 
 
 ### Added
-- Dragging & scaling! You can now type `/scp` (or `/simpleclasspower` if you're just that much of a nutcase) to unlock the frame. You can scale the size with the mouse wheel and drag it to your desired position. This is only available when not engaged in combat, and your choices will be saved between sessions. 
+- In-game help menu. Type `/scp help` for a full list of options. 
+- Optional class coloring of the resource points! 
+- Optional smart hiding (old behavior), or have the frame always visible (new default).
+- Dragging & scaling! You can scale the size with the mouse wheel and drag it to your desired position. This is only available when not engaged in combat, and your choices will be saved between sessions. 
 
 ## [1.0.6] 2018-08-14
 ### Changed
