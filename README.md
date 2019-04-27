@@ -1,11 +1,14 @@
-[![Support me on Patreon](http://i.imgur.com/kVU2d3f.png)](https://www.patreon.com/cogwerkz)
+[ ![Become a Patreon](http://azerite.org/img/social-media-buttons-patreon-small.jpg) ](https://www.patreon.com/AzeriteUI) 
 
-This is a simple addon that shows your class resources in a combo point manner with a runic Diablo-like theme. 
+This is a simple addon that shows your class resources in a combo point manner with a runic Diablo-like theme. It's movable, scalable and have several color choices.
+
+Type **/scp** to open the options window!
 
 ## Features  
-* Only visible when you have a target selected
+* Movable & scalable *(New in 2.x)*
 * Points not available or currently regenerated are semi-transparent
 * Everything is even more semi-transparent when not engaged in combat
+* Only visible when you have an attackable target selected *(optional)*
 
 ## Supported class resources  
 * Combo Points *(Druids, Rogues, Vehicles)*
@@ -17,7 +20,15 @@ This is a simple addon that shows your class resources in a combo point manner w
 * Runes *(Death Knights)*
 
 ## Chat commands
-* **/scp**
+* **/scp** - Toggle the overlay for dragging and scaling! Drag with the mouse, change scale with the mousewheel. 
+* **/scp classcolor on** - Enables class coloring of the resource points. 
+* **/scp classcolor off** - Disables class coloring and reverts to power colors. *(default)* 
+* **/scp show always** - Always show the frame. *(default)* 
+* **/scp show smart** - Hides when you have no target set, or if your target is unattackable. 
+* **/scp help** - Shows the above choices in-game. 
+
+## Planned, but unreleased features
+* Multiple texture choices
 
 ### **Pledge to our work:**  
 * Patreon: [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui)  
@@ -35,3 +46,7 @@ This is a simple addon that shows your class resources in a combo point manner w
 * Twitter Blakmane: [@troko512](https://twitter.com/troko512)  
 * Twitter Goldpaw: [@GoldpawTheGreat](https://twitter.com/goldpawthegreat)  
 
+## **Official Supporters:**  
+* **Adam Stribley, Amariah Crawford, Elexys, Mel Brannon, Jennifer Graff, Kjartan Kirchhof, Jan Terje Hellemsbakken**  
+
+_Visit [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui) to become an Official Supporter!_
