@@ -1,4 +1,4 @@
-local LibMover = CogWheel:Set("LibMover", 22)
+local LibMover = CogWheel:Set("LibMover", 23)
 if (not LibMover) then	
 	return
 end
@@ -233,6 +233,17 @@ end
 
 -- Called when the mover is shown
 OnShow = function(self)
+
+	local data = MoverData[self]
+	local target = TargetByMover[self]
+
+	-- Resize and reposition the mover frame. 
+	local targetWidth, targetHeight = target:GetSize()
+	local relativeScale = target:GetEffectiveScale() / self:GetEffectiveScale()
+	
+	self:SetSize(targetWidth*relativeScale, targetHeight*relativeScale)
+	self:Place(data.point, "UICenter", data.point, data.offsetX, data.offsetY)
+	
 	LibMover:SendMessage("CG_MOVER_UNLOCKED", self, TargetByMover[self])
 end 
 
@@ -608,7 +619,11 @@ LibMover.UnlockMover = function(self, target)
 	if (InCombatLockdown()) then 
 		return 
 	end 
-	MoverByTarget[target]:Show()
+	local mover = MoverByTarget[target]
+	local data = MoverData[mover]
+	if (data.enableDragging or data.enableScaling) then 
+		mover:Show()
+	end
 end 
 
 LibMover.ToggleMover = function(self, target)
@@ -616,7 +631,15 @@ LibMover.ToggleMover = function(self, target)
 		return 
 	end 
 	local mover = MoverByTarget[target]
-	mover:SetShown(not mover:IsShown())
+	local data = MoverData[mover]
+	if (mover:IsShown()) then 
+		mover:Hide()
+	else 
+		local data = MoverData[mover]
+		if (data.enableDragging or data.enableScaling) then 
+			mover:Show()
+		end
+	end 
 end 
 
 LibMover.LockAllMovers = function(self)
@@ -642,8 +665,11 @@ LibMover.UnlockAllMovers = function(self)
 	local changed
 	for target,mover in pairs(MoverByTarget) do 
 		if (not mover:IsShown()) then 
-			mover:Show()
-			changed = true
+			local data = MoverData[mover]
+			if (data.enableDragging or data.enableScaling) then 
+				mover:Show()
+				changed = true
+			end
 		end 
 	end 
 	if (changed) then 
