@@ -1,4 +1,4 @@
-local LibMover = CogWheel:Set("LibMover", 20)
+local LibMover = CogWheel:Set("LibMover", 22)
 if (not LibMover) then	
 	return
 end
@@ -31,6 +31,7 @@ local string_find = string.find
 local string_format = string.format
 local string_join = string.join
 local string_match = string.match
+local tonumber = tonumber
 local type = type
 
 -- WoW API
@@ -338,9 +339,9 @@ UpdateTexts = function(self, point, x, y, name)
 	local data = MoverData[self]
 	local infoString
 	if (point and x and y) then 
-		infoString = string_format("|cffffb200%s|r || |cffffb200%s, %s|r || |r|cffffb200%.1f|r", point, tostring(round(x, 1)), tostring(round(y, 1)), data.scale)
+		infoString = string_format("|cffffb200%s|r || |cffffb200%s, %s|r || |r|cffffb200%.2f|r", point, tostring(round(x, 1)), tostring(round(y, 1)), data.scale)
 	else 
-		infoString = string_format("|cffffb200%s|r || |cffffb200%s, %s|r || |r|cffffb200%.1f|r", data.point, tostring(round(data.offsetX, 1)), tostring(round(data.offsetY, 1)), data.scale)
+		infoString = string_format("|cffffb200%s|r || |cffffb200%s, %s|r || |r|cffffb200%.2f|r", data.point, tostring(round(data.offsetX, 1)), tostring(round(data.offsetY, 1)), data.scale)
 	end 
 	self.name:SetText(name or data.name)
 	self.info:SetText(infoString)
@@ -431,13 +432,23 @@ Mover.SetScalingEnabled = function(self, enableScaling)
 	MoverData[self].enableScaling = enableScaling and true or false
 end
 
-Mover.SetMaxScale = function(self, maxScale)
-	MoverData[self].maxScale = maxScale
+Mover.SetMinScale = function(self, minScale)
+	MoverData[self].minScale = tonumber(minScale) or .5
 end 
 
-Mover.SetMinScale = function(self, minScale)
-	MoverData[self].minScale = minScale
+Mover.SetMaxScale = function(self, maxScale)
+	MoverData[self].maxScale = tonumber(maxScale) or 1.5
 end 
+
+Mover.SetScaleStep = function(self, scaleStep)
+	MoverData[self].scaleStep = tonumber(scaleStep) or .1
+end 
+
+Mover.SetMinMaxScale = function(self, minScale, maxScale, scaleStep)
+	MoverData[self].minScale = tonumber(minScale) or .5
+	MoverData[self].maxScale = tonumber(maxScale) or 1.5
+	MoverData[self].scaleStep = tonumber(scaleStep) or .1
+end
 
 -- Sets the default position of the mover.
 -- This will parse the position provided. 
@@ -612,8 +623,15 @@ LibMover.LockAllMovers = function(self)
 	if (InCombatLockdown()) then 
 		return 
 	end 
+	local changed
 	for target,mover in pairs(MoverByTarget) do 
-		mover:Hide()
+		if (mover:IsShown()) then 
+			mover:Hide()
+			changed = true
+		end 
+	end 
+	if (changed) then 
+		LibMover:SendMessage("CG_MOVERS_LOCKED")
 	end 
 end 
 
@@ -621,9 +639,16 @@ LibMover.UnlockAllMovers = function(self)
 	if (InCombatLockdown()) then 
 		return 
 	end 
+	local changed
 	for target,mover in pairs(MoverByTarget) do 
-		mover:Show()
+		if (not mover:IsShown()) then 
+			mover:Show()
+			changed = true
+		end 
 	end 
+	if (changed) then 
+		LibMover:SendMessage("CG_MOVERS_UNLOCKED")
+	end
 end 
 
 LibMover.ToggleAllMovers = function(self)
