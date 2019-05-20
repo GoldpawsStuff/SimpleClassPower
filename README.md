@@ -35,6 +35,7 @@ Type **/scp** to open the options window!
 ### **Pledge to our work:**  
 * Patreon: [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui)  
 * PayPal: [www.paypal.me/AzeriteUI](https://www.paypal.me/azeriteui)  
+* Liberapay: [liberapay.com/AzeriteTeam/donate](https://liberapay.com/AzeriteTeam/donate)
 
 ### **Follow Azerite Team:**  
 * Discord: [discord.gg/MUSfWXd](https://discord.gg/MUSfWXd)  
