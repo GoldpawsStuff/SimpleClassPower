@@ -189,6 +189,18 @@ end
 ---------------------------------------------------
 -- Module Callbacks
 ---------------------------------------------------
+Module.IsDefaultPosition = function(self)
+	return self.mover:IsDefaultPosition()
+end 
+
+Module.IsDefaultScale = function(self)
+	return self.mover:IsDefaultScale()
+end 
+
+Module.IsDefaultPositionAndScale = function(self)
+	return self.mover:IsDefaultPosition() and self.mover:IsDefaultScale()
+end 
+
 Module.ParseSavedSettings = function(self)
 	local db = self:NewConfig("Core", defaults, "global")
 	for key in pairs(deprecated) do 
@@ -223,6 +235,15 @@ Module.OnEvent = function(self, event, ...)
 		if (mover == self.mover) and (target == self.frame) then 
 			self.db.savedPosition = { point, "UICenter", point, offsetX, offsetY }
 		end 
+	elseif (event == "CG_MOVER_SCALE_UPDATED") then 
+		local mover, target, scale = ... 
+		if (mover == self.mover) and (target == self.frame) then 
+			if (self:IsDefaultScale()) then 
+				self.db.savedScale = nil
+			else 
+				self.db.savedScale = scale
+			end 
+		end
 	elseif (event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD") then 
 		NUMPOINTS = PlayerClass == "DEATHKNIGHT" and 6 or (PlayerClass == "MONK" and GetSpecialization() == SPEC_MONK_BREWMASTER) or 5
 	end
@@ -284,7 +305,9 @@ Module.OnInit = function(self)
 	-- Make it movable!
 	local mover = self:CreateMover(frame) 
 	mover:SetName(ADDON)
+	mover:SetMinMaxScale(.5, 1.5, .05)
 	mover:SetDefaultPosition(unpack(self.layout.Place))
+	mover:SetScale(self.db.savedScale or 1) -- use the mover to set the frame scale, or positions will be wonky
 	for name,method in pairs(Mover) do 
 		mover[name] = method
 	end 
@@ -298,6 +321,7 @@ end
 
 Module.OnEnable = function(self)
 	self:RegisterMessage("CG_MOVER_UPDATED", "OnEvent")
+	self:RegisterMessage("CG_MOVER_SCALE_UPDATED", "OnEvent")
 	if (PlayerClass == "MONK") then 
 		self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent") 
 		self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent") 
