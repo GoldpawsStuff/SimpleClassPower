@@ -50,6 +50,6 @@ Type **/scp** to open the options window!
 * Twitter Goldpaw: [@GoldpawTheGreat](https://twitter.com/goldpawthegreat)  
 
 ## **Official Supporters:**  
-* **Adam Stribley, Amariah Crawford, Elexys, Mel Brannon, Jennifer Graff, Kjartan Kirchhof, Jan Terje Hellemsbakken**  
+* **Adam Stribley, Amariah Crawford, ChibiBespin, Elexys, Jennifer Graff, Kjartan Kirchhof, Jan Terje Hellemsbakken**  
 
 _Visit [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui) to become an Official Supporter!_
