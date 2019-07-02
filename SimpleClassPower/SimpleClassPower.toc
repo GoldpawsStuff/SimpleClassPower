@@ -1,4 +1,4 @@
-## Interface: 80100
+## Interface: 80200
 ## Name: SimpleClassPower
 ## Title: |cffa335eeSimple|r|cffffffffClassPower|r
 ## Author: Lars "Goldpaw" Norberg
