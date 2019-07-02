@@ -1,7 +1,10 @@
-local LibFrame = CogWheel:Set("LibFrame", 48)
+local LibFrame = CogWheel:Set("LibFrame", 53)
 if (not LibFrame) then	
 	return
 end
+
+local LibClientBuild = CogWheel("LibClientBuild")
+assert(LibClientBuild, "LibFrame requires LibClientBuild to be loaded.")
 
 local LibMessage = CogWheel("LibMessage")
 assert(LibMessage, "LibFrame requires LibMessage to be loaded.")
@@ -16,6 +19,7 @@ local LibSecureHook = CogWheel("LibSecureHook")
 assert(LibSecureHook, "LibFrame requires LibSecureHook to be loaded.")
 
 -- Embed event functionality into this
+LibClientBuild:Embed(LibFrame)
 LibMessage:Embed(LibFrame)
 LibEvent:Embed(LibFrame)
 LibHook:Embed(LibFrame)
@@ -26,6 +30,7 @@ local _G = _G
 local getmetatable = getmetatable
 local math_floor = math.floor
 local pairs = pairs
+local pcall = pcall
 local select = select
 local string_match = string.match
 local type = type
@@ -121,7 +126,7 @@ local SetDisplaySize = function()
 	LibFrame.frame:SetFrameStrata(UIParent:GetFrameStrata())
 	LibFrame.frame:SetFrameLevel(UIParent:GetFrameLevel())
 	LibFrame.frame:ClearAllPoints()
-	LibFrame.frame:SetPoint("BOTTOM", WorldFrame, "BOTTOM")
+	LibFrame.frame:SetPoint("BOTTOM", UIParent, "BOTTOM")
 	LibFrame.frame:SetScale(scale)
 	LibFrame.frame:SetSize(round(displayWidth), round(displayHeight))
 end 
@@ -171,6 +176,14 @@ end
 local parseAnchorStrict = function(anchor)
 	return anchor and (keyWords[anchor] and keyWords[anchor]() or _G[anchor] and _G[anchor] or anchor) 
 end
+
+-- WoW 8.2 restricted frame check
+local isRestricted = function(frame)
+	if (frame and (not pcall(frame.GetPoint, frame))) then
+		return true
+	end
+end
+
 
 -- Embed source methods into target.
 local embed = function(target, source)
@@ -380,7 +393,6 @@ LibFrame.Enable = function(self)
 	-- Could it be enough to just track frame changes and not events?
 	self:SetHook(UIParent, "OnSizeChanged", "UpdateDisplaySize", "LibFrame_UIParent_OnSizeChanged")
 	self:SetHook(WorldFrame, "OnSizeChanged", "UpdateDisplaySize", "LibFrame_WorldFrame_OnSizeChanged")
-
 end 
 
 LibFrame:UnregisterAllEvents()
