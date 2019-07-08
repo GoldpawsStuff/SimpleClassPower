@@ -1,4 +1,4 @@
-local LibTooltip = CogWheel:Set("LibTooltip", 50)
+local LibTooltip = CogWheel:Set("LibTooltip", 51)
 if (not LibTooltip) then	
 	return
 end
@@ -1665,7 +1665,7 @@ end
 Tooltip.GetTooltipUnit = function(self)
 	local unit = self.unit
 	if (not unit) then 
-		return UnitExists("mouseover") and unit or nil 
+		return UnitExists("mouseover") and "mouseover" or nil
 	elseif UnitExists(unit) then 
 		return UnitIsUnit(unit, "mouseover") and "mouseover" or unit 
 	end
