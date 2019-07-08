@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.10-Release] 2019-07-08
+### Changed
+- Updated back-end. 
+
 ## [2.0.9-Release] 2019-07-02
 ### Changed
 - Updated back-end and bumped toc version WoW client patch 8.2.0.
