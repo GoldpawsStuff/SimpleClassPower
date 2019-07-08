@@ -4,13 +4,13 @@ This is a simple addon that shows your class resources in a combo point manner w
 
 Type **/scp** to open the options window!
 
-## Features  
+## **Features**  
 * Movable & scalable *(New in 2.x)*
 * Points not available or currently regenerated are semi-transparent
 * Everything is even more semi-transparent when not engaged in combat
 * Only visible when you have an attackable target selected *(optional)*
 
-## Supported class resources  
+## **Supported class resources:**  
 * Combo Points *(Druids, Rogues, Vehicles)*
 * Arcane Charges *(Arcane Mages)*
 * Holy Power *(Retribution Paladins)*
@@ -19,7 +19,7 @@ Type **/scp** to open the options window!
 * Stagger *(Brewmaster Monk)*
 * Runes *(Death Knights)*
 
-## Chat commands
+## **Chat commands:**
 * **/scp** - Toggle the overlay for dragging and scaling! Drag with the mouse, change scale with the mousewheel. 
 * **/scp classcolor on** - Enables class coloring of the resource points. 
 * **/scp classcolor off** - Disables class coloring and reverts to power colors. *(default)* 
@@ -27,17 +27,17 @@ Type **/scp** to open the options window!
 * **/scp show smart** - Hides when you have no target set, or if your target is unattackable. 
 * **/scp help** - Shows the above choices in-game. 
 
-## Planned, but unreleased features
+## **Planned, but unreleased features:**
 * Multiple texture choices
 * Custom resource colors
 * Remember different setups based on enabled UI addons (like DiabolicUI, AzeriteUI etc)
 
-### **Pledge to our work:**  
+## **Pledge to our work:**  
 * Patreon: [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui)  
 * PayPal: [www.paypal.me/AzeriteUI](https://www.paypal.me/azeriteui)  
-* Liberapay: [liberapay.com/AzeriteTeam/donate](https://liberapay.com/AzeriteTeam/donate)
+* Liberapay: [liberapay.com/AzeriteTeam/donate](https://liberapay.com/AzeriteTeam/donate)  
 
-### **Follow Azerite Team:**  
+## **Follow Azerite Team:**  
 * Discord: [discord.gg/MUSfWXd](https://discord.gg/MUSfWXd)  
 * Twitter: [@AzeriteUI](https://twitter.com/azeriteui)  
 * Instagram: [@AzeriteUI](https://instagram.com/azeriteui/)  
