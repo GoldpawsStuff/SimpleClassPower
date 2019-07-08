@@ -44,12 +44,3 @@ Type **/scp** to open the options window!
 * Facebook: [@AzeriteUI](https://www.facebook.com/azeriteui/)  
 * YouTube: [@AzeriteUI](https://www.youtube.com/azeriteui)  
 * Reddit: [@AzeriteUI](https://www.reddit.com/r/azeriteui/)  
-
-### **Follow Goldpaw & Blakmane:**  
-* Twitter Blakmane: [@troko512](https://twitter.com/troko512)  
-* Twitter Goldpaw: [@GoldpawTheGreat](https://twitter.com/goldpawthegreat)  
-
-## **Official Supporters:**  
-* **Adam Stribley, Amariah Crawford, ChibiBespin, Elexys, Jennifer Graff, Kjartan Kirchhof, Jan Terje Hellemsbakken**  
-
-_Visit [www.patreon.com/AzeriteUI](https://www.patreon.com/azeriteui) to become an Official Supporter!_
