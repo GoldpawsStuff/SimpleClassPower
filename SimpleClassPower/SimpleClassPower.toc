@@ -15,28 +15,10 @@
 # Unique global addon font objects
 FontStyles.xml
 
-# Addon libraries, the main engine of it all
+# Addon libraries & plugins, the main engine of it all
 back-end\wheel.lua
-back-end\libraries\clientbuild.lua
-back-end\libraries\locale.lua
-back-end\libraries\hook.lua
-back-end\libraries\securehook.lua
-back-end\libraries\message.lua
-back-end\libraries\event.lua
-back-end\libraries\db.lua
-back-end\libraries\module.lua
-back-end\libraries\frame.lua
-back-end\libraries\statusbar.lua
-back-end\libraries\tooltipscanner.lua
-back-end\libraries\tooltip.lua
-back-end\libraries\fader.lua
-back-end\libraries\mover.lua
-back-end\libraries\widgetcontainer.lua
-back-end\libraries\unitframe.lua
-back-end\libraries\slash.lua
-
-# Unit dependant library plugins
-back-end\plugins\unit_classpower.lua
+back-end\libraries.xml
+back-end\plugins.xml
 
 # Addon localization
 locale\enUS.lua
