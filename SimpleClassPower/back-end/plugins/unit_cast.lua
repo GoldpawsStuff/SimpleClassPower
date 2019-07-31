@@ -1,7 +1,3 @@
-
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "Cast requires LibClientBuild to be loaded.")
-
 -- Lua API
 local _G = _G
 local math_floor = math.floor
@@ -14,12 +10,18 @@ local GetNetStats = _G.GetNetStats
 local GetTime = _G.GetTime
 local UnitCastingInfo = _G.UnitCastingInfo
 local UnitChannelInfo = _G.UnitChannelInfo
+local UnitClass = _G.UnitClass
 local UnitExists = _G.UnitExists
+local UnitIsPlayer = _G.UnitIsPlayer
+local UnitIsUnit = _G.UnitIsUnit
+local UnitReaction = _G.UnitReaction
 
--- WoW Constants
-local MILLISECONDS_ABBR = MILLISECONDS_ABBR
+-- Localization
+local L_FAILED = _G.FAILED
+local L_INTERRUPTED = _G.INTERRUPTED
+local L_MILLISECONDS_ABBR = _G.MILLISECONDS_ABBR
 
--- Time constants
+-- Constants
 local DAY, HOUR, MINUTE = 86400, 3600, 60
 
 -- Define it here so it can call itself later on
@@ -111,6 +113,9 @@ local clear = function(element)
 	if element.Value then 
 		element.Value:SetText("")
 	end
+	if element.Failed then 
+		element.Failed:SetText("")
+	end
 	if element.SpellQueue then 
 		element.SpellQueue:SetValue(0, true)
 	end
@@ -163,14 +168,44 @@ local updateSpellQueueValue = function(element)
 	element.SpellQueue:SetValue(value, true)
 end
 
+local UpdateColor = function(element, unit)
+	if element.OverrideColor then
+		return element:OverrideColor(unit)
+	end
+	local self = element._owner
+	local color, r, g, b
+	if (element.colorClass and UnitIsPlayer(unit)) then
+		local _, class = UnitClass(unit)
+		color = class and self.colors.class[class]
+	elseif (element.colorPetAsPlayer and UnitIsUnit(unit, "pet")) then 
+		local _, class = UnitClass("player")
+		color = class and self.colors.class[class]
+	elseif (element.colorReaction and UnitReaction(unit, "player")) then
+		color = self.colors.reaction[UnitReaction(unit, "player")]
+	end
+	if color then 
+		r, g, b = color[1], color[2], color[3]
+	end 
+	if (r) then 
+		element:SetStatusBarColor(r, g, b)
+	end 
+	if element.PostUpdateColor then 
+		element:PostUpdateColor(unit)
+	end 
+end
+
 local OnUpdate = function(element, elapsed)
-	local unit = element._owner.unit
+	local self = element._owner
+	local unit = self.unit
 	if (not unit) or (not UnitExists(unit)) then 
 		clear(element)
 		element.castID = nil
 		element.casting = nil
 		element.channeling = nil
-		element:Hide()
+		if (element:IsShown()) then 
+			element:Hide()
+			self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+		end
 		return element.PostUpdate and element:PostUpdate(unit)
 	end
 	local r, g, b
@@ -181,7 +216,10 @@ local OnUpdate = function(element, elapsed)
 			element.tradeskill = nil
 			element.casting = nil
 			element.channeling = nil
-			element:Hide()
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
 			return element.PostUpdate and element:PostUpdate(unit)
 		end
 		if element.Value then
@@ -229,11 +267,25 @@ local OnUpdate = function(element, elapsed)
 			element:PostUpdate(unit, duration)
 		end
 		
+	elseif element.failedMessageTimer then 
+		element.failedMessageTimer = element.failedMessageTimer - elapsed
+		if (element.failedMessageTimer > 0) then 
+			return 
+		end 
+		element.failedMessageTimer = nil
+		local msg = element.Failed or element.Value or element.Name
+		if msg then 
+			msg:SetText("")
+		end
 	else
 		clear(element)
 		element.casting = nil
 		element.castID = nil
 		element.channeling = nil
+		if (element:IsShown()) then 
+			element:Hide()
+			self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+		end
 		return element.PostUpdate and element:PostUpdate(unit)
 	end
 end 
@@ -268,9 +320,11 @@ Update = function(self, event, unit, ...)
 			element.tradeskill = isTradeSkill
 			element.total = nil
 			element.starttime = nil
-
+			element.failedMessageTimer = nil
+	
 			element:SetMinMaxValues(0, element.total or element.max, true)
 			element:SetValue(element.duration, true) 
+			element:UpdateColor(unit)
 
 			if element.Name then element.Name:SetText(utf8sub(text, 32, true)) end
 			if element.Icon then element.Icon:SetTexture(texture) end
@@ -287,11 +341,17 @@ Update = function(self, event, unit, ...)
 				updateSpellQueueValue(element)
 			end 
 	
-			element:Show()
+			if (not element:IsShown()) then 
+				element:Show()
+				self:SendMessage("CG_UNITFRAME_HAS_CAST_ELEMENT", self, unit)
+			end
 
 		else
 			element:SetValue(0, true)
-			element:Hide()
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
 		end
 		
 	elseif (event == "UNIT_SPELLCAST_FAILED") then
@@ -305,9 +365,24 @@ Update = function(self, event, unit, ...)
 		element.tradeskill = nil
 		element.total = nil
 		element.casting = nil
+		element.channeling = nil
 		element.notInterruptible = nil
+		element.castID = nil
 
-		element:Hide()
+		if element.Shield then element.Shield:Hide() end 
+
+		if element.timeToHold then
+			element.failedMessageTimer = element.timeToHold
+			local msg = element.Failed or element.Value or element.Name
+			if msg then 
+				msg:SetText(utf8sub(L_FAILED, 32, true)) 
+			end 
+		else
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
+		end 
 		
 	elseif (event == "UNIT_SPELLCAST_STOP") then
 		local castID, spellID = ...
@@ -321,7 +396,10 @@ Update = function(self, event, unit, ...)
 		element.tradeskill = nil
 		element.total = nil
 
-		element:Hide()
+		if (element:IsShown()) then 
+			element:Hide()
+			self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+		end
 		
 	elseif (event == "UNIT_SPELLCAST_INTERRUPTED") then
 		local castID, spellID = ...
@@ -334,9 +412,25 @@ Update = function(self, event, unit, ...)
 		element.tradeskill = nil
 		element.total = nil
 		element.casting = nil
+		element.channeling = nil
 		element.notInterruptible = nil
+		element.castID = nil
 
-		element:Hide()
+		if element.Shield then element.Shield:Hide() end 
+
+		if element.timeToHold then
+			element.failedMessageTimer = element.timeToHold
+			local msg = element.Failed or element.Value or element.Name
+			if msg then 
+				msg:SetText(utf8sub(L_INTERRUPTED, 32, true)) 
+			end 
+		else
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
+		end 
+
 		
 	elseif (event == "UNIT_SPELLCAST_INTERRUPTIBLE") then 
 		element.notInterruptible = nil
@@ -393,10 +487,12 @@ Update = function(self, event, unit, ...)
 
 			element.casting = nil
 			element.castID = nil
-
+			element.failedMessageTimer = nil
+	
 			element:SetMinMaxValues(0, max, true)
 			element:SetValue(duration, true)
-			
+			element:UpdateColor(unit)
+
 			if element.Name then element.Name:SetText(utf8sub(name, 32, true)) end
 			if element.Icon then element.Icon:SetTexture(texture) end
 			if element.Value then element.Value:SetText("") end
@@ -412,11 +508,18 @@ Update = function(self, event, unit, ...)
 				updateSpellQueueValue(element)
 			end 
 
-			element:Show()
+			if (not element:IsShown()) then 
+				element:Show()
+				self:SendMessage("CG_UNITFRAME_HAS_CAST_ELEMENT", self, unit)
+			end
 			
 		else
 			element:SetValue(0, true)
-			element:Hide()
+
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
 		end
 		
 	elseif (event == "UNIT_SPELLCAST_CHANNEL_UPDATE") then
@@ -442,7 +545,10 @@ Update = function(self, event, unit, ...)
 			clear(element)
 			element.channeling = nil
 			element.notInterruptible = nil
-			element:Hide()
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
 		end
 		
 	else
@@ -452,15 +558,19 @@ Update = function(self, event, unit, ...)
 		if UnitChannelInfo(unit) then
 			return Update(self, "UNIT_SPELLCAST_CHANNEL_START", unit)
 		end
+		if (not element.failedMessageTimer) then 
+			clear(element)
 
-		clear(element)
+			element.casting = nil
+			element.notInterruptible = nil
+			element.tradeskill = nil
+			element.total = nil
 
-		element.casting = nil
-		element.notInterruptible = nil
-		element.tradeskill = nil
-		element.total = nil
-
-		element:Hide()
+			if (element:IsShown()) then 
+				element:Hide()
+				self:SendMessage("CG_UNITFRAME_LOST_CAST_ELEMENT", self, unit)
+			end
+		end 
 	end
 
 	if element.PostUpdate then 
@@ -488,7 +598,7 @@ local Enable = function(self)
 		if (not (unit and unit:match("%wtarget$"))) then
 			self:RegisterEvent("UNIT_SPELLCAST_START", Proxy)
 			self:RegisterEvent("UNIT_SPELLCAST_FAILED", Proxy)
-			self:RegisterEvent("UNIT_SPELLCAST_FAILED_QUIET", Proxy)
+			--self:RegisterEvent("UNIT_SPELLCAST_FAILED_QUIET", Proxy)
 			self:RegisterEvent("UNIT_SPELLCAST_STOP", Proxy)
 			self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", Proxy)
 			self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE", Proxy)
@@ -498,6 +608,8 @@ local Enable = function(self)
 			self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", Proxy)
 			self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", Proxy)
 		end 
+
+		element.UpdateColor = UpdateColor
 		element:SetScript("OnUpdate", OnUpdate)
 
 		return true
@@ -512,7 +624,7 @@ local Disable = function(self)
 
 		self:UnregisterEvent("UNIT_SPELLCAST_START", Proxy)
 		self:UnregisterEvent("UNIT_SPELLCAST_FAILED", Proxy)
-		self:UnregisterEvent("UNIT_SPELLCAST_FAILED_QUIET", Proxy)
+		--self:UnregisterEvent("UNIT_SPELLCAST_FAILED_QUIET", Proxy)
 		self:UnregisterEvent("UNIT_SPELLCAST_STOP", Proxy)
 		self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED", Proxy)
 		self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTIBLE", Proxy)
@@ -526,5 +638,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Cast", Enable, Disable, Proxy, 16)
+	Lib:RegisterElement("Cast", Enable, Disable, Proxy, 24)
 end 

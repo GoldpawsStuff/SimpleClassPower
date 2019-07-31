@@ -1,4 +1,4 @@
-local LibNamePlate = CogWheel:Set("LibNamePlate", 32)
+local LibNamePlate = CogWheel:Set("LibNamePlate", 35)
 if (not LibNamePlate) then	
 	return
 end
@@ -317,6 +317,7 @@ local UnregisterAllEvents = NamePlate_MT.__index.UnregisterAllEvents
 
 local IsMessageRegistered = LibNamePlate.IsMessageRegistered
 local RegisterMessage = LibNamePlate.RegisterMessage
+local SendMessage = LibNamePlate.SendMessage
 local UnregisterMessage = LibNamePlate.UnregisterMessage
 
 -- TODO: Cache some of this upon unit changes and show, to avoid so many function calls. 
@@ -578,6 +579,8 @@ NamePlate.RegisterMessage = function(self, event, func, unitless)
 	end
 end
 
+NamePlate.SendMessage = SendMessage -- Don't need a proxy on this one
+
 NamePlate.UnregisterMessage = function(self, event, func)
 	-- silently fail if the event isn't even registered
 	if not callbacks[self] or not callbacks[self][event] then
@@ -599,7 +602,6 @@ NamePlate.UnregisterMessage = function(self, event, func)
 		end
 	end
 end
-
 
 NamePlate.UpdateAllElements = function(self, event, ...)
 	local unit = self.unit
@@ -771,7 +773,7 @@ LibNamePlate.CreateNamePlate = function(self, baseFrame, name)
 	-- *Blizzard changed nameplate format and also anchoring points in Legion,
 	--  so naturally we're using a different function for this too. Speed!
 	if (LibNamePlate:IsBuild("8.2.0")) then 
-		plate:SetPoint("TOP", baseFrame, "TOP", 0, 0)
+		plate:SetPoint("CENTER", baseFrame, "CENTER", 0, 0)
 		plate:Show()	
 	else
 		local sizer = plate:CreateFrame()
