@@ -1,4 +1,4 @@
-[ ![Become a Patreon](http://azerite.org/img/social-media-buttons-patreon-small.jpg) ](https://www.patreon.com/AzeriteUI) 
+[ ![Become a Patreon](http://azeriteui.com/img/social-media-buttons-patreon-small.jpg) ](https://www.patreon.com/AzeriteUI) 
 
 This is a simple addon that shows your class resources in a combo point manner with a runic Diablo-like theme. It's movable, scalable and have several color choices.
 
