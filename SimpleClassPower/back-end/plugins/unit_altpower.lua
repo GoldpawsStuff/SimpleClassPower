@@ -1,6 +1,8 @@
-
 -- Lua API
 local _G = _G
+local string_format = string.format
+local tonumber = tonumber
+local tostring = tostring
 
 -- WoW API
 local UnitAlternatePowerInfo = _G.UnitAlternatePowerInfo
@@ -168,16 +170,15 @@ end
 local Disable = function(self)
 	local element = self.AltPower
 	if element then
-		element:Hide()
-
 		self:UnregisterEvent("UNIT_POWER_UPDATE", Proxy)
 		self:UnregisterEvent("UNIT_MAXPOWER", Proxy)
 		self:UnregisterEvent("UNIT_POWER_BAR_SHOW", Proxy)
 		self:UnregisterEvent("UNIT_POWER_BAR_HIDE", Proxy)
+		element:Hide()
 	end
 end 
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("AltPower", Enable, Disable, Proxy, 8)
+	Lib:RegisterElement("AltPower", Enable, Disable, Proxy, 10)
 end 

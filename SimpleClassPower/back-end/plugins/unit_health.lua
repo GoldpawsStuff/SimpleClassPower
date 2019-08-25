@@ -43,6 +43,8 @@ local S_AFK = _G.AFK
 local S_DEAD = _G.DEAD
 local S_PLAYER_OFFLINE = _G.PLAYER_OFFLINE
 
+-- Constants
+local _,CLASS = UnitClass("player")
 
 -- Utility Functions
 ---------------------------------------------------------------------	
@@ -180,7 +182,9 @@ local UpdateColors = function(health, unit, min, max)
 
 	local self = health._owner
 	local color, r, g, b
-	if (health.colorTapped and health.tapped) then
+	if (health.colorPlayer and UnitIsUnit(unit, "player")) then 
+		color = self.colors.class[CLASS]
+	elseif (health.colorTapped and health.tapped) then
 		color = self.colors.tapped
 	elseif (health.colorDisconnected and health.disconnected) then
 		color = self.colors.disconnected
@@ -207,13 +211,16 @@ local UpdateColors = function(health, unit, min, max)
 				threat = UnitThreatSituation(unit)
 			end
 		end
-
 		if (health.colorThreat and threat) then 
 			color = self.colors.threat[threat]
-		elseif (health.colorReaction and UnitReaction(unit, "player")) then
-			color = self.colors.reaction[UnitReaction(unit, "player")]
-		elseif (health.colorHealth) then 
-			color = self.colors.health
+		end
+
+		if (not color) then 
+			if (health.colorReaction and UnitReaction(unit, "player")) then
+				color = self.colors.reaction[UnitReaction(unit, "player")]
+			elseif (health.colorHealth) then 
+				color = self.colors.health
+			end
 		end
 	end
 
@@ -262,22 +269,22 @@ local UpdateSizes = function(health)
 	width = math_floor(width + .5)
 	height = math_floor(height + .5)
 
-	health.Absorb:SetSize(width, height)
 	health.Preview:SetSize(width, height)
+	health.Absorb:SetSize(width, height)
 	health.Predict:SetSize(width, height)
 end
 
 local UpdateStatusBarTextures = function(health)
 	local texture = health:GetStatusBarTexture():GetTexture()
-	health.Absorb:SetStatusBarTexture(texture)
 	health.Preview:SetStatusBarTexture(texture)
+	health.Absorb:SetStatusBarTexture(texture)
 	health.Predict:SetTexture(texture)
 end
 
 local UpdateTexCoords = function(health)
 	local left, right, top, bottom = health:GetTexCoord()
-	health.Absorb:SetTexCoord(left, right, top, bottom)
 	health.Preview:SetTexCoord(left, right, top, bottom)
+	health.Absorb:SetTexCoord(left, right, top, bottom)
 
 	-- Forcing an update to adjust the prediction texture.
 	-- This might be at a tiny, tiny performance cost, 
@@ -339,10 +346,10 @@ local Update = function(self, event, unit)
 	-- Retrieve values for our bars
 	local curHealth = UnitHealth(unit) -- The unit's current health
 	local maxHealth = UnitHealthMax(unit) -- The unit's maximum health
-	local allAbsorbs = UnitGetTotalAbsorbs(unit) or 0 -- The total amount of damage the unit can absorb before losing health
-	local allNegativeHeals = UnitGetTotalHealAbsorbs(unit) or 0 -- The total amount of healing the unit can absorb without gaining health
-	local myIncomingHeal = UnitGetIncomingHeals(unit, "player") or 0 -- Incoming heals to the unit cast by the player
-	local allIncomingHeal = UnitGetIncomingHeals(unit) or 0 -- Incoming heals to the unit from any source
+	local allAbsorbs = absorb and UnitGetTotalAbsorbs(unit) or 0 -- The total amount of damage the unit can absorb before losing health
+	local allNegativeHeals = absorb and UnitGetTotalHealAbsorbs(unit) or 0 -- The total amount of healing the unit can absorb without gaining health
+	local myIncomingHeal = absorb and UnitGetIncomingHeals(unit, "player") or 0 -- Incoming heals to the unit cast by the player
+	local allIncomingHeal = absorb and UnitGetIncomingHeals(unit) or 0 -- Incoming heals to the unit from any source
 	local otherIncomingHeal = 0
 
 	-- Store this for the postupdates
@@ -357,7 +364,6 @@ local Update = function(self, event, unit)
 	-- If it's not instant, the prediction will be misaligned.
 	preview:SetMinMaxValues(0, maxHealth, true)
 	preview:SetValue(curHealth, true)
-
 
 	local hasOverHealAbsorb = false
 	if (allNegativeHeals > allIncomingHeal) then
@@ -650,5 +656,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Health", Enable, Disable, Proxy, 32)
+	Lib:RegisterElement("Health", Enable, Disable, Proxy, 36)
 end 

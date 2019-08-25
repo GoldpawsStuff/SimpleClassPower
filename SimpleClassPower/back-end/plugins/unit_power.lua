@@ -2,6 +2,7 @@
 local _G = _G
 local math_floor = math.floor
 local pairs = pairs
+local string_format = string.format
 local tonumber = tonumber
 local tostring = tostring
 local unpack = unpack
@@ -246,8 +247,6 @@ end
 local Disable = function(self)
 	local element = self.Power
 	if element then
-		element:Hide()
-
 		self:UnregisterEvent("UNIT_POWER_FREQUENT", Proxy)
 		self:UnregisterEvent("UNIT_POWER_UPDATE", Proxy)
 		self:UnregisterEvent("UNIT_POWER_BAR_SHOW", Proxy)
@@ -256,11 +255,11 @@ local Disable = function(self)
 		self:UnregisterEvent("UNIT_CONNECTION", Proxy)
 		self:UnregisterEvent("UNIT_MAXPOWER", Proxy)
 		self:UnregisterEvent("UNIT_FACTION", Proxy)
-
+		element:Hide()
 	end
 end 
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Power", Enable, Disable, Proxy, 13)
+	Lib:RegisterElement("Power", Enable, Disable, Proxy, 14)
 end 

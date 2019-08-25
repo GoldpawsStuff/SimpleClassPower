@@ -14,10 +14,6 @@
 	* Stagger: 			Generated points. 3 cap. 3 baseline. 
 
 ]]--
-
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "ClassPower requires LibClientBuild to be loaded.")
-
 local LibFrame = CogWheel("LibFrame")
 assert(LibFrame, "ClassPower requires LibFrame to be loaded.")
 
@@ -941,27 +937,27 @@ local Enable = function(self)
 			element[i]._owner = element
 		end
 
-		-- All must check for vehicles
-		-- *Also of importance that none 
-		-- of the powerTypes remove this event.
-		self:RegisterEvent("UNIT_DISPLAYPOWER", Proxy)
-		self:RegisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
-		self:RegisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
-		self:RegisterEvent("UNIT_EXITING_VEHICLE", Proxy)
-		self:RegisterEvent("UNIT_EXITED_VEHICLE", Proxy)
-		self:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR", Proxy, true)
-		self:RegisterEvent("UPDATE_POSSESS_BAR", Proxy, true)
-		
+		local level = UnitLevel("player")
+		if ((PLAYERCLASS == "PALADIN") and (level < PALADINPOWERBAR_SHOW_LEVEL)) or (PLAYERCLASS == "WARLOCK") and (level < SHARDBAR_SHOW_LEVEL) then
+			self:RegisterEvent("PLAYER_LEVEL_UP", Proxy, true)
+		end  
+
 		-- We'll handle spec specific powers from here, 
 		-- but will leave level checking to the sub-elements.
 		if (PLAYERCLASS == "MONK") or (PLAYERCLASS == "MAGE") or (PLAYERCLASS == "PALADIN") then 
 			self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", Proxy, true) 
 		end 
 
-		local level = UnitLevel("player")
-		if ((PLAYERCLASS == "PALADIN") and (level < PALADINPOWERBAR_SHOW_LEVEL)) or (PLAYERCLASS == "WARLOCK") and (level < SHARDBAR_SHOW_LEVEL) then
-			self:RegisterEvent("PLAYER_LEVEL_UP", Proxy, true)
-		end  
+		-- All must check for vehicles
+		-- *Also of importance that none 
+		-- of the powerTypes remove this event.
+		self:RegisterEvent("UNIT_DISPLAYPOWER", Proxy)
+		self:RegisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
+		self:RegisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
+		self:RegisterEvent("UNIT_EXITED_VEHICLE", Proxy)
+		self:RegisterEvent("UNIT_EXITING_VEHICLE", Proxy)
+		self:RegisterEvent("UPDATE_OVERRIDE_ACTIONBAR", Proxy, true)
+		self:RegisterEvent("UPDATE_POSSESS_BAR", Proxy, true)
 
 		--if element.hideWhenNoTarget then 
 		--	self:RegisterEvent("PLAYER_TARGET_CHANGED", Proxy, true)
@@ -974,29 +970,24 @@ end
 local Disable = function(self)
 	local element = self.ClassPower
 	if element then
-
-		-- Disable the current powerType, if any
 		if element._currentType then 
 			element.DisablePower(self)
 			element._currentType = nil
 			element.powerType = nil
 		end 
-
-		-- Remove generic events
-		self:UnregisterEvent("UNIT_DISPLAYPOWER", Proxy)
-		self:UnregisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
-		self:UnregisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
-		self:UnregisterEvent("UNIT_EXITING_VEHICLE", Proxy)
-		self:UnregisterEvent("UNIT_EXITED_VEHICLE", Proxy)
-		self:UnregisterEvent("UPDATE_OVERRIDE_ACTIONBAR", Proxy)
-		self:UnregisterEvent("UPDATE_POSSESS_BAR", Proxy)
 		self:UnregisterEvent("PLAYER_LEVEL_UP", Proxy)
 		self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED", Proxy)
-		--self:UnregisterEvent("PLAYER_TARGET_CHANGED", Proxy)
+		self:UnregisterEvent("UNIT_DISPLAYPOWER", Proxy)
+		self:UnregisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
+		self:UnregisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
+		self:UnregisterEvent("UNIT_EXITED_VEHICLE", Proxy)
+		self:UnregisterEvent("UNIT_EXITING_VEHICLE", Proxy)
+		self:UnregisterEvent("UPDATE_OVERRIDE_ACTIONBAR", Proxy)
+		self:UnregisterEvent("UPDATE_POSSESS_BAR", Proxy)
 	end
 end 
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 28)
+	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 30)
 end 

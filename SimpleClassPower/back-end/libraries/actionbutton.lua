@@ -1,4 +1,4 @@
-local LibSecureButton = CogWheel:Set("LibSecureButton", 53)
+local LibSecureButton = CogWheel:Set("LibSecureButton", 60)
 if (not LibSecureButton) then	
 	return
 end
@@ -342,7 +342,7 @@ local Update = function(self, event, ...)
 
 	elseif (event == "ACTIONBAR_SLOT_CHANGED") then
 		if ((arg1 == 0) or (arg1 == self.buttonAction)) then
-			self.SpellHighlight:Hide()
+			self:HideOverlayGlow()
 			self:Update()
 			self:UpdateAutoCastMacro()
 		end
@@ -356,8 +356,9 @@ local Update = function(self, event, ...)
 	elseif 	(event == "ACTIONBAR_UPDATE_STATE") or
 			((event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE") and (arg1 == "player")) or
 			((event == "COMPANION_UPDATE") and (arg1 == "MOUNT")) then
-		self:UpdateCheckedState()
-
+				self:UpdateFlash()
+				--self:UpdateCheckedState()
+		
 	elseif (event == "CURSOR_UPDATE") 
 		or (event == "ACTIONBAR_SHOWGRID") or (event == "PET_BAR_SHOWGRID") 
 		or (event == "ACTIONBAR_HIDEGRID") or (event == "PET_BAR_HIDEGRID") then 
@@ -378,22 +379,22 @@ local Update = function(self, event, ...)
 	elseif (event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW") then
 		local spellID = self:GetSpellID()
 		if (spellID and (spellID == arg1)) then
-			self.SpellHighlight:Show()
+			self:ShowOverlayGlow()
 		else
 			local actionType, id = GetActionInfo(self.buttonAction)
 			if (actionType == "flyout") and FlyoutHasSpell(id, arg1) then
-				self.SpellHighlight:Show()
+				self:ShowOverlayGlow()
 			end
 		end
 
 	elseif (event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE") then
 		local spellID = self:GetSpellID()
 		if (spellID and (spellID == arg1)) then
-			self.SpellHighlight:Hide()
+			self:HideOverlayGlow()
 		else
 			local actionType, id = GetActionInfo(self.buttonAction)
 			if actionType == "flyout" and FlyoutHasSpell(id, arg1) then
-				self.SpellHighlight:Hide()
+				self:HideOverlayGlow()
 			end
 		end
 
@@ -404,7 +405,8 @@ local Update = function(self, event, ...)
 		self:Update() -- really? how often is this called?
 
 	elseif (event == "TRADE_SKILL_SHOW") or (event == "TRADE_SKILL_CLOSE") or (event == "ARCHAEOLOGY_CLOSED") then
-		self:UpdateCheckedState()
+		self:UpdateFlash()
+		--self:UpdateCheckedState()
 
 	elseif (event == "UPDATE_BINDINGS") then
 		self:UpdateBinding()
@@ -596,11 +598,21 @@ ActionButton.UpdateBinding = function(self)
 end 
 
 ActionButton.UpdateCheckedState = function(self)
-	if IsCurrentAction(self.buttonAction) or IsAutoRepeatAction(self.buttonAction) then
-		self:SetChecked(true)
-	else
-		self:SetChecked(false)
-	end
+	-- Suppress the checked state if the button is currently flashing
+	local action = self.buttonAction
+	if self.Flash then 
+		if IsCurrentAction(action) and not((IsAttackAction(action) and IsCurrentAction(action)) or IsAutoRepeatAction(action)) then
+			self:SetChecked(true)
+		else
+			self:SetChecked(false)
+		end
+	else 
+		if (IsCurrentAction(action) or IsAutoRepeatAction(action)) then
+			self:SetChecked(true)
+		else
+			self:SetChecked(false)
+		end
+	end 
 end
 
 ActionButton.UpdateCooldown = function(self)
@@ -708,6 +720,7 @@ ActionButton.UpdateFlash = function(self)
 			end
 		end 
 	end 
+	self:UpdateCheckedState()
 end 
 
 ActionButton.UpdateFlyout = function(self)
@@ -776,13 +789,36 @@ ActionButton.UpdateGrid = function(self)
 	self:SetAlpha(0)
 end
 
-ActionButton.UpdateSpellHighlight = function(self)
-	local spellId = self:GetSpellID()
-	if (spellId and IsSpellOverlayed(spellId)) then
+ActionButton.ShowOverlayGlow = function(self)
+	if self.SpellHighlight then 
+		local model = self.SpellHighlight.Model
+		local w,h = self:GetSize()
+		if (w and h) then 
+			model:SetSize(w*2,h*2)
+			model:Show()
+		else 
+			model:Hide()
+		end 
 		self.SpellHighlight:Show()
-	else
-		self.SpellHighlight:Hide()
 	end
+end
+
+ActionButton.HideOverlayGlow = function(self)
+	if self.SpellHighlight then 
+		self.SpellHighlight:Hide()
+		self.SpellHighlight.Model:Hide()
+	end
+end
+
+ActionButton.UpdateSpellHighlight = function(self)
+	if self.SpellHighlight then 
+		local spellId = self:GetSpellID()
+		if (spellId and IsSpellOverlayed(spellId)) then
+			self:ShowOverlayGlow()
+		else
+			self:HideOverlayGlow()
+		end
+	end 
 end
 
 -- Called when the usable state of the button changes
@@ -893,7 +929,6 @@ ActionButton.OnEnable = function(self)
 	self:RegisterEvent("ACTIONBAR_SHOWGRID", Update)
 	self:RegisterEvent("ARCHAEOLOGY_CLOSED", Update)
 	self:RegisterEvent("COMPANION_UPDATE", Update)
-	--self:RegisterEvent("CURRENT_SPELL_CAST_CHANGED", Update)
 	self:RegisterEvent("CURSOR_UPDATE", Update)
 	self:RegisterEvent("LOSS_OF_CONTROL_ADDED", Update)
 	self:RegisterEvent("LOSS_OF_CONTROL_UPDATE", Update)
@@ -904,7 +939,6 @@ ActionButton.OnEnable = function(self)
 	self:RegisterEvent("PLAYER_ENTERING_WORLD", Update)
 	self:RegisterEvent("PLAYER_LEAVE_COMBAT", Update)
 	self:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED", Update)
-	--self:RegisterEvent("PLAYER_REGEN_ENABLED", Update)
 	self:RegisterEvent("PLAYER_TARGET_CHANGED", Update)
 	self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", Update)
 	self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", Update)
@@ -912,14 +946,12 @@ ActionButton.OnEnable = function(self)
 	self:RegisterEvent("SPELL_UPDATE_ICON", Update)
 	self:RegisterEvent("TRADE_SKILL_CLOSE", Update)
 	self:RegisterEvent("TRADE_SKILL_SHOW", Update)
-	--self:RegisterEvent("SPELLS_CHANGED", Update)
 	self:RegisterEvent("UNIT_ENTERED_VEHICLE", Update)
 	self:RegisterEvent("UNIT_EXITED_VEHICLE", Update)
 	self:RegisterEvent("UPDATE_BINDINGS", Update)
 	self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", Update)
 	self:RegisterEvent("UPDATE_SUMMONPETS_ACTION", Update)
 	self:RegisterEvent("UPDATE_VEHICLE_ACTIONBAR", Update)
-
 end
 
 ActionButton.OnDisable = function(self)
@@ -931,7 +963,6 @@ ActionButton.OnDisable = function(self)
 	self:UnregisterEvent("ACTIONBAR_SHOWGRID", Update)
 	self:UnregisterEvent("ARCHAEOLOGY_CLOSED", Update)
 	self:UnregisterEvent("COMPANION_UPDATE", Update)
-	--self:UnregisterEvent("CURRENT_SPELL_CAST_CHANGED", Update)
 	self:UnregisterEvent("CURSOR_UPDATE", Update)
 	self:UnregisterEvent("LOSS_OF_CONTROL_ADDED", Update)
 	self:UnregisterEvent("LOSS_OF_CONTROL_UPDATE", Update)
@@ -942,7 +973,6 @@ ActionButton.OnDisable = function(self)
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD", Update)
 	self:UnregisterEvent("PLAYER_LEAVE_COMBAT", Update)
 	self:UnregisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED", Update)
-	--self:UnregisterEvent("PLAYER_REGEN_ENABLED", Update)
 	self:UnregisterEvent("PLAYER_TARGET_CHANGED", Update)
 	self:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", Update)
 	self:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", Update)
@@ -950,7 +980,6 @@ ActionButton.OnDisable = function(self)
 	self:UnregisterEvent("SPELL_UPDATE_ICON", Update)
 	self:UnregisterEvent("TRADE_SKILL_CLOSE", Update)
 	self:UnregisterEvent("TRADE_SKILL_SHOW", Update)
-	--self:UnregisterEvent("SPELLS_CHANGED", Update)
 	self:UnregisterEvent("UNIT_ENTERED_VEHICLE", Update)
 	self:UnregisterEvent("UNIT_EXITED_VEHICLE", Update)
 	self:UnregisterEvent("UPDATE_BINDINGS", Update)
@@ -1074,11 +1103,13 @@ LibSecureButton.CreateButtonSpellHighlight = function(self, button)
 	local spellHighlight = button:CreateFrame("Frame")
 	spellHighlight:Hide()
 	spellHighlight:SetFrameLevel(button:GetFrameLevel() + 10)
+	button.SpellHighlight = spellHighlight
 
 	local texture = spellHighlight:CreateTexture()
 	texture:SetDrawLayer("ARTWORK", 2)
 	texture:SetAllPoints()
 	texture:SetVertexColor(255/255, 225/255, 125/255, 1)
+	button.SpellHighlight.Texture = texture
 
 	local model = spellHighlight:CreateFrame("PlayerModel")
 	model:Hide()
@@ -1090,27 +1121,8 @@ LibSecureButton.CreateButtonSpellHighlight = function(self, button)
 	model:SetCamDistanceScale(3)
 	model:SetPortraitZoom(0)
 	model:SetPosition(0, 0, 0)
+	model:SetPoint("TOP")
 
-	local sizeFactor = 2 -- 3 is huge
-	local updateSize = function()
-		local w,h = button:GetSize()
-		if (w and h) then 
-			model:SetSize(w*sizeFactor,h*sizeFactor)
-			if (not model:IsShown()) then 
-				model:Show()
-			end 
-		else 
-			model:Hide()
-		end 
-	end
-	updateSize(model)
-
-	hooksecurefunc(button, "SetSize", updateSize)
-	hooksecurefunc(button, "SetWidth", updateSize)
-	hooksecurefunc(button, "SetHeight", updateSize)
-
-	button.SpellHighlight = spellHighlight
-	button.SpellHighlight.Texture = texture
 	button.SpellHighlight.Model = model
 end
 
@@ -1478,13 +1490,10 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 	Buttons[self][button] = buttonType
 	AllButtons[button] = buttonType
 
-	-- Add any methods from the optional template.
-	-- *we're now allowing modules to overwrite methods.
+	-- Add anything in the optional template.
 	if buttonTemplate then
-		for methodName, func in pairs(buttonTemplate) do
-			if (type(func) == "function") then
-				button[methodName] = func
-			end
+		for key,value in pairs(buttonTemplate) do
+			button[key] = value
 		end
 	end
 	

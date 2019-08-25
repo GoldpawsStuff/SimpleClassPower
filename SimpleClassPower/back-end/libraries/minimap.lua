@@ -1,4 +1,4 @@
-local Version = 37 -- This library's version 
+local Version = 38 -- This library's version 
 local MapVersion = Version -- Minimap library version the minimap created by this is compatible with
 local LibMinimap, OldVersion = CogWheel:Set("LibMinimap", Version)
 if (not LibMinimap) then

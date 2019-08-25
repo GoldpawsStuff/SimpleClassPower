@@ -70,10 +70,8 @@ local Enable = function(self)
 		element._owner = self
 		element.ForceUpdate = ForceUpdate
 		element.UpdateColor = UpdateColor
-
 		self:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE", Proxy)
 		self:RegisterEvent("UNIT_THREAT_LIST_UPDATE", Proxy)
-
 		return true
 	end
 end 
@@ -81,14 +79,13 @@ end
 local Disable = function(self)
 	local element = self.Threat
 	if element then
-		element:Hide()
-
 		self:UnregisterEvent("UNIT_THREAT_SITUATION_UPDATE", Proxy)
 		self:UnregisterEvent("UNIT_THREAT_LIST_UPDATE", Proxy)
+		element:Hide()
 	end
 end 
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Threat", Enable, Disable, Proxy, 8)
+	Lib:RegisterElement("Threat", Enable, Disable, Proxy, 10)
 end 

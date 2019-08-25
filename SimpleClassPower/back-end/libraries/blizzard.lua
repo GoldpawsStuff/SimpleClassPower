@@ -1,4 +1,4 @@
-local LibBlizzard = CogWheel:Set("LibBlizzard", 21)
+local LibBlizzard = CogWheel:Set("LibBlizzard", 28)
 if (not LibBlizzard) then 
 	return
 end
@@ -9,7 +9,6 @@ assert(LibClientBuild, "LibBlizzard requires LibClientBuild to be loaded.")
 local LibEvent = CogWheel("LibEvent")
 assert(LibEvent, "LibBlizzard requires LibEvent to be loaded.")
 
--- Embed event functionality into this
 LibEvent:Embed(LibBlizzard)
 
 -- Lua API
@@ -19,15 +18,14 @@ local debugstack = debugstack
 local error = error
 local pairs = pairs
 local select = select
+local string_format = string.format
 local string_join = string.join
 local string_match = string.match
 local type = type
 
 -- WoW API
 local CreateFrame = _G.CreateFrame
-local FCF_GetCurrentChatFrame = _G.FCF_GetCurrentChatFrame
 local IsAddOnLoaded = _G.IsAddOnLoaded
-local RegisterStateDriver = _G.RegisterStateDriver
 local SetCVar = _G.SetCVar
 local TargetofTarget_Update = _G.TargetofTarget_Update
 
@@ -139,174 +137,134 @@ local killUnitFrame = function(baseName, keepParent)
 end
 
 UIWidgets["ActionBars"] = function(self)
-	UIWidgets["ActionBarsMainBar"](self)
-	UIWidgets["ActionBarsMicroButtons"](self)
-	UIWidgets["ActionBarsBagBarAnims"](self)
-end 
+	for _,object in pairs({
+		"CollectionsMicroButtonAlert",
+		"EJMicroButtonAlert",
+		"LFDMicroButtonAlert",
+		"MainMenuBarVehicleLeaveButton",
+		"OverrideActionBar",
+		"PetActionBarFrame",
+		"StanceBarFrame",
+		"TalentMicroButtonAlert",
+		"TutorialFrameAlertButton"
+	}) do 
+		if (_G[object]) then 
+			_G[object]:UnregisterAllEvents()
+		else 
+			print(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+		end
+	end 
+	for _,object in pairs({
+		"CollectionsMicroButtonAlert",
+		"EJMicroButtonAlert",
+		"FramerateLabel",
+		"FramerateText",
+		"LFDMicroButtonAlert",
+		"MainMenuBarArtFrame",
+		"MainMenuBarVehicleLeaveButton",
+		"MicroButtonAndBagsBar",
+		"MultiBarBottomLeft",
+		"MultiBarBottomRight",
+		"MultiBarLeft",
+		"MultiBarRight",
+		"OverrideActionBar",
+		"PetActionBarFrame",
+		"PossessBarFrame",
+		"StanceBarFrame",
+		"StreamingIcon",
+		"TalentMicroButtonAlert"
+	}) do 
+		if (_G[object]) then 
+			_G[object]:SetParent(UIHider)
+		else 
+			print(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+		end
+	end 
+	for _,object in pairs({
+		"CollectionsMicroButtonAlert",
+		"EJMicroButtonAlert",
+		"LFDMicroButtonAlert",
+		"MainMenuBarArtFrame",
+		"MicroButtonAndBagsBar",
+		"OverrideActionBar",
+		"PetActionBarFrame",
+		"PossessBarFrame",
+		"StanceBarFrame",
+		"StatusTrackingBarManager",
+		"TutorialFrameAlertButton"
+	}) do 
+		if (_G[object]) then 
+			_G[object]:Hide()
+		else 
+			print(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+		end
+	end 
+	for _,object in pairs({
+		"ActionButton", 
+		"MultiBarBottomLeftButton", 
+		"MultiBarBottomRightButton", 
+		"MultiBarRightButton",
+		"MultiBarLeftButton"
+	}) do 
+		for i = 1,NUM_ACTIONBAR_BUTTONS do
+			local button = _G[object..i]
+			button:Hide()
+			button:UnregisterAllEvents()
+			button:SetAttribute("statehidden", true)
+		end
+	end 
+	for i = 1,6 do
+		local button = _G["OverrideActionBarButton"..i]
+		button:UnregisterAllEvents()
+		button:SetAttribute("statehidden", true)
 
-UIWidgets["ActionBarsMainBar"] = function(self)
+		-- Just in case it's still there, covering stuff. 
+		-- This has happened in some rare cases. Hiding won't work. 
+		button:EnableMouse(false) 
+	end
+	if PlayerTalentFrame then
+		PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+	elseif TalentFrame_LoadUI then
+		hooksecurefunc("TalentFrame_LoadUI", function() PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED") end)
+	end
+
 	MainMenuBar:EnableMouse(false)
+	MainMenuBar:SetAlpha(0)
 	MainMenuBar:UnregisterEvent("DISPLAY_SIZE_CHANGED")
 	MainMenuBar:UnregisterEvent("UI_SCALE_CHANGED")
 	MainMenuBar.slideOut:GetAnimations():SetOffset(0,0)
 
-	MainMenuBarArtFrame:Hide()
-	MainMenuBarArtFrame:SetParent(UIHider)
-
-	StatusTrackingBarManager:Hide()
-
+	-- If I'm not hiding this, it will become visible (though transparent)
+	-- and cover our own custom vehicle/possess action bar. 
+	OverrideActionBar:EnableMouse(false)
+	OverrideActionBar:SetAlpha(0)
 	OverrideActionBar.slideOut:GetAnimations():SetOffset(0,0)
 
-	MultiBarBottomLeft:SetParent(UIHider)
-	MultiBarBottomRight:SetParent(UIHider)
-	MultiBarLeft:SetParent(UIHider)
-	MultiBarRight:SetParent(UIHider)
-	
-	for i = 1,12 do
-		local ActionButton = _G["ActionButton" .. i]
-		ActionButton:Hide()
-		ActionButton:UnregisterAllEvents()
-		ActionButton:SetAttribute("statehidden", true)
-
-		local MultiBarBottomLeftButton = _G["MultiBarBottomLeftButton" .. i]
-		MultiBarBottomLeftButton:Hide()
-		MultiBarBottomLeftButton:UnregisterAllEvents()
-		MultiBarBottomLeftButton:SetAttribute("statehidden", true)
-
-		local MultiBarBottomRightButton = _G["MultiBarBottomRightButton" .. i]
-		MultiBarBottomRightButton:Hide()
-		MultiBarBottomRightButton:UnregisterAllEvents()
-		MultiBarBottomRightButton:SetAttribute("statehidden", true)
-
-		local MultiBarRightButton = _G["MultiBarRightButton" .. i]
-		MultiBarRightButton:Hide()
-		MultiBarRightButton:UnregisterAllEvents()
-		MultiBarRightButton:SetAttribute("statehidden", true)
-
-		local MultiBarLeftButton = _G["MultiBarLeftButton" .. i]
-		MultiBarLeftButton:Hide()
-		MultiBarLeftButton:UnregisterAllEvents()
-		MultiBarLeftButton:SetAttribute("statehidden", true)
+	-- Gets rid of the loot anims
+	MainMenuBarBackpackButton:UnregisterEvent("ITEM_PUSH") 
+	for slot = 0,3 do
+		_G["CharacterBag"..slot.."Slot"]:UnregisterEvent("ITEM_PUSH") 
 	end
-	
+
 	UIPARENT_MANAGED_FRAME_POSITIONS["MainMenuBar"] = nil
 	UIPARENT_MANAGED_FRAME_POSITIONS["StanceBarFrame"] = nil
 	UIPARENT_MANAGED_FRAME_POSITIONS["PossessBarFrame"] = nil
 	UIPARENT_MANAGED_FRAME_POSITIONS["PETACTIONBAR_YPOS"] = nil
-
-
-	StanceBarFrame:UnregisterAllEvents()
-	StanceBarFrame:Hide()
-	StanceBarFrame:SetParent(UIHider)
-
-	PossessBarFrame:Hide()
-	PossessBarFrame:SetParent(UIHider)
-
-	PetActionBarFrame:UnregisterAllEvents()
-	PetActionBarFrame:SetParent(UIHider)
-	PetActionBarFrame:Hide()
-
-
-	-- If I'm not hiding this, it will become visible (though transparent)
-	-- and cover our own custom vehicle/possess action bar. 
-	OverrideActionBar:SetParent(UIHider)
-	OverrideActionBar:EnableMouse(false)
-	OverrideActionBar:UnregisterAllEvents()
-	OverrideActionBar:Hide()
-	OverrideActionBar:SetAlpha(0)
-
-	for i = 1,6 do
-		_G["OverrideActionBarButton"..i]:UnregisterAllEvents()
-		_G["OverrideActionBarButton"..i]:SetAttribute("statehidden", true)
-		_G["OverrideActionBarButton"..i]:EnableMouse(false) -- just in case it's still there
-	end
-	
-	MainMenuBarVehicleLeaveButton:UnregisterAllEvents()
-	MainMenuBarVehicleLeaveButton:SetParent(UIHider)
-
-	--UIPARENT_MANAGED_FRAME_POSITIONS["MultiBarRight"] = nil
-	--UIPARENT_MANAGED_FRAME_POSITIONS["MultiBarLeft"] = nil
-	--UIPARENT_MANAGED_FRAME_POSITIONS["MultiBarBottomLeft"] = nil
-	--UIPARENT_MANAGED_FRAME_POSITIONS["MultiBarBottomRight"] = nil
 	UIPARENT_MANAGED_FRAME_POSITIONS["MultiCastActionBarFrame"] = nil
 	UIPARENT_MANAGED_FRAME_POSITIONS["MULTICASTACTIONBAR_YPOS"] = nil
-	
-	StreamingIcon:SetParent(UIHider)
-	FramerateLabel:SetParent(UIHider)
-	FramerateText:SetParent(UIHider)
-
-end 
-
-UIWidgets["ActionBarsMicroButtons"] = function(self)
-
-	MicroButtonAndBagsBar:Hide()
-	MicroButtonAndBagsBar:SetParent(UIHider)
-
-	CollectionsMicroButtonAlert:UnregisterAllEvents()
-	CollectionsMicroButtonAlert:SetParent(UIHider)
-	CollectionsMicroButtonAlert:Hide()
-
-	EJMicroButtonAlert:UnregisterAllEvents()
-	EJMicroButtonAlert:SetParent(UIHider)
-	EJMicroButtonAlert:Hide()
-
-	LFDMicroButtonAlert:UnregisterAllEvents()
-	LFDMicroButtonAlert:SetParent(UIHider)
-	LFDMicroButtonAlert:Hide()
-
-	TutorialFrameAlertButton:UnregisterAllEvents()
-	TutorialFrameAlertButton:Hide()
-
-	TalentMicroButtonAlert:UnregisterAllEvents()
-	TalentMicroButtonAlert:SetParent(UIHider)
-
-	if _G.PlayerTalentFrame then
-		_G.PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-	else
-		hooksecurefunc("TalentFrame_LoadUI", function() _G.PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED") end)
-	end
-end 
-
-UIWidgets["ActionBarsBagBarAnims"] = function(self)
-
-	-- Gets rid of the loot anims
-	local backpackButton = _G.MainMenuBarBackpackButton
-	if backpackButton then 
-		backpackButton:UnregisterEvent("ITEM_PUSH") 
-	end 
-
-	for slot = 0,3 do
-		local bagSlot = _G["CharacterBag"..slot.."Slot"]
-		if bagSlot then 
-			bagSlot:UnregisterEvent("ITEM_PUSH") 
-		end 
-	end
-
-	-- hook event removal to any buttons we somehow missed
-	if _G.ItemAnim_OnLoad then 
-		hooksecurefunc("ItemAnim_OnLoad", function(self) self:UnregisterEvent("ITEM_PUSH") end)
-	end 
-
 end
 
 UIWidgets["Alerts"] = function(self)
-	local AlertFrame = _G.AlertFrame
-	if AlertFrame then
-		AlertFrame:UnregisterAllEvents()
-		AlertFrame:SetParent(UIHider)
-	end
+	AlertFrame:UnregisterAllEvents()
+	AlertFrame:SetParent(UIHider)
 end 
 
 UIWidgets["Auras"] = function(self)
-	local BuffFrame = _G.BuffFrame
-	local TemporaryEnchantFrame = _G.TemporaryEnchantFrame
-
 	BuffFrame:SetScript("OnLoad", nil)
 	BuffFrame:SetScript("OnUpdate", nil)
 	BuffFrame:SetScript("OnEvent", nil)
 	BuffFrame:SetParent(UIHider)
 	BuffFrame:UnregisterAllEvents()
-
 	TemporaryEnchantFrame:SetScript("OnUpdate", nil)
 	TemporaryEnchantFrame:SetParent(UIHider)
 end 
@@ -325,16 +283,11 @@ end
 UIWidgetDependency["CaptureBar"] = "Blizzard_UIWidgets"
 
 UIWidgets["CastBars"] = function(self)
-	local CastingBarFrame = _G.CastingBarFrame
-	local PetCastingBarFrame = _G.PetCastingBarFrame
-
-	-- player's castbar
 	CastingBarFrame:SetScript("OnEvent", nil)
 	CastingBarFrame:SetScript("OnUpdate", nil)
 	CastingBarFrame:SetParent(UIHider)
 	CastingBarFrame:UnregisterAllEvents()
-	
-	-- player's pet's castbar
+
 	PetCastingBarFrame:SetScript("OnEvent", nil)
 	PetCastingBarFrame:SetScript("OnUpdate", nil)
 	PetCastingBarFrame:SetParent(UIHider)
@@ -342,19 +295,14 @@ UIWidgets["CastBars"] = function(self)
 end 
 
 UIWidgets["Chat"] = function(self)
-
-	-- kill off QuickJoinToastButton (FriendsMicroButton pre-Legion)
+	-- This was called FriendsMicroButton pre-Legion
 	local killQuickToast = function(self, event, ...)
-		local QuickJoinToastButton = _G.QuickJoinToastButton
 		QuickJoinToastButton:UnregisterAllEvents()
 		QuickJoinToastButton:Hide()
 		QuickJoinToastButton:SetAlpha(0)
 		QuickJoinToastButton:EnableMouse(false)
 		QuickJoinToastButton:SetParent(UIHider)
-
 	end 
-
-	-- initial killing of the quicktoast button
 	killQuickToast()
 
 	-- This pops back up on zoning sometimes, so keep removing it
@@ -362,67 +310,61 @@ UIWidgets["Chat"] = function(self)
 end 
 
 UIWidgets["LevelUpDisplay"] = function(self)
-	local LevelUpDisplay = _G.LevelUpDisplay
-		
 	LevelUpDisplay:UnregisterAllEvents()
 	LevelUpDisplay:StopBanner()
 end 
 
 UIWidgets["Minimap"] = function(self)
+	for _,object in pairs({
+		"GameTimeFrame",
+		"GarrisonLandingPageMinimapButton"
+	}) do 
+		if (_G[object]) then 
+			_G[object]:UnregisterAllEvents()
+		else
+			print(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+		end 
+	end 
+	for _,object in pairs({
+		"GameTimeFrame",
+		"GarrisonLandingPageMinimapButton",
+		"GuildInstanceDifficulty",
+		"MiniMapInstanceDifficulty",
+		"MinimapBorder",
+		"MinimapBorderTop",
+		"MinimapCluster",
+		"MiniMapMailBorder",
+		"MiniMapMailFrame",
+		"MinimapBackdrop", 
+		"MinimapNorthTag",
+		"MiniMapTracking",
+		"MiniMapTrackingButton",
+		"MiniMapWorldMapButton",
+		"MinimapZoomIn",
+		"MinimapZoomOut",
+		"MinimapZoneTextButton"
+	}) do 
+		if (_G[object]) then 
+			_G[object]:SetParent(UIHider)
+		else
+			print(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+		end 
+	end 
 
-	_G.GameTimeFrame:SetParent(UIHider)
-	_G.GameTimeFrame:UnregisterAllEvents()
+	QueueStatusMinimapButton:SetHighlightTexture("") 
+	QueueStatusMinimapButtonBorder:SetAlpha(0)
+	QueueStatusMinimapButtonBorder:SetTexture(nil)
+	QueueStatusMinimapButton.Highlight:SetAlpha(0)
+	QueueStatusMinimapButton.Highlight:SetTexture(nil)
 
-	_G.MinimapBorder:SetParent(UIHider)
-	_G.MinimapBorderTop:SetParent(UIHider)
-	_G.MinimapCluster:SetParent(UIHider)
-	_G.MiniMapMailBorder:SetParent(UIHider)
-	_G.MiniMapMailFrame:SetParent(UIHider)
-	_G.MinimapBackdrop:SetParent(UIHider) 
-	_G.MinimapNorthTag:SetParent(UIHider)
-	_G.MiniMapTracking:SetParent(UIHider)
-	_G.MiniMapTrackingButton:SetParent(UIHider)
-	_G.MiniMapWorldMapButton:SetParent(UIHider)
-	_G.MinimapZoomIn:SetParent(UIHider)
-	_G.MinimapZoomOut:SetParent(UIHider)
-	_G.MinimapZoneTextButton:SetParent(UIHider)
-	
-	-- WoD/Legion Garrison/Class hall button
-	-- ugly hack to keep the keybind functioning
-	local GarrisonLandingPageMinimapButton = _G.GarrisonLandingPageMinimapButton
-	GarrisonLandingPageMinimapButton:SetParent(UIHider)
-	GarrisonLandingPageMinimapButton:UnregisterAllEvents()
+	-- Ugly hack to keep the keybind functioning
 	GarrisonLandingPageMinimapButton:Show()
 	GarrisonLandingPageMinimapButton.Hide = GarrisonLandingPageMinimapButton.Show
-
-	-- New dungeon finder eye in MoP
-	local QueueStatusMinimapButton = _G.QueueStatusMinimapButton
-	QueueStatusMinimapButton:SetHighlightTexture("") 
-	--QueueStatusMinimapButton.Eye.texture:SetParent(UIHider)
-	--QueueStatusMinimapButton.Eye.texture:SetAlpha(0)
-
-	if QueueStatusMinimapButtonBorder then
-		QueueStatusMinimapButtonBorder:SetTexture(nil)
-		QueueStatusMinimapButtonBorder:SetAlpha(0)
-	end
-
-	if QueueStatusMinimapButton.Highlight then -- bugged out in MoP
-		QueueStatusMinimapButton.Highlight:SetTexture(nil)
-		QueueStatusMinimapButton.Highlight:SetAlpha(0)
-	end
-
-	-- Guild instance difficulty
-	_G.GuildInstanceDifficulty:SetParent(UIHider)
-
-	-- Instance difficulty
-	_G.MiniMapInstanceDifficulty:SetParent(UIHider)
-
-	-- Can we do this?
+	
 	self:DisableUIWidget("MinimapClock")
 end
 
 UIWidgets["MinimapClock"] = function(self)
-	local TimeManagerClockButton = _G.TimeManagerClockButton
 	TimeManagerClockButton:SetParent(UIHider)
 	TimeManagerClockButton:UnregisterAllEvents()
 end
@@ -440,9 +382,6 @@ end
 
 UIWidgetDependency["ObjectiveTracker"] = "Blizzard_ObjectiveTracker"
 UIWidgets["ObjectiveTracker"] = function(self)
-	local ObjectiveTrackerFrame = _G.ObjectiveTrackerFrame
-	local ObjectiveTrackerBlocksFrame = _G.ObjectiveTrackerBlocksFrame
-	local ScenarioBlocksFrame = _G.ScenarioBlocksFrame
 
 	ObjectiveTrackerFrame:UnregisterAllEvents()
 	ObjectiveTrackerFrame:SetScript("OnLoad", nil)
@@ -469,7 +408,6 @@ end
 
 UIWidgetDependency["OrderHall"] = "Blizzard_OrderHallUI"
 UIWidgets["OrderHall"] = function(self)
-	local OrderHallCommandBar = _G.OrderHallCommandBar
 	OrderHallCommandBar:SetScript("OnLoad", nil)
 	OrderHallCommandBar:SetScript("OnShow", nil)
 	OrderHallCommandBar:SetScript("OnHide", nil)
@@ -485,7 +423,6 @@ UIWidgets["PlayerPowerBarAlt"] = function(self)
 end 
 
 UIWidgets["TimerTracker"] = function(self)
-	local TimerTracker = _G.TimerTracker
 	TimerTracker:SetScript("OnEvent", nil)
 	TimerTracker:SetScript("OnUpdate", nil)
 	TimerTracker:UnregisterAllEvents()
@@ -500,7 +437,6 @@ UIWidgets["TimerTracker"] = function(self)
 end
 
 UIWidgets["TotemFrame"] = function(self)
-	local TotemFrame = _G.TotemFrame
 	TotemFrame:UnregisterAllEvents()
 	TotemFrame:SetScript("OnEvent", nil)
 	TotemFrame:SetScript("OnShow", nil)
@@ -508,7 +444,6 @@ UIWidgets["TotemFrame"] = function(self)
 end
 
 UIWidgets["Tutorials"] = function(self)
-	local TutorialFrame = _G.TutorialFrame
 	TutorialFrame:UnregisterAllEvents()
 	TutorialFrame:Hide()
 	TutorialFrame.Show = TutorialFrame.Hide
@@ -519,18 +454,18 @@ UIWidgets["UnitFramePlayer"] = function(self)
 
 	-- A lot of blizz modules relies on PlayerFrame.unit
 	-- This includes the aura frame and several others. 
-	_G.PlayerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-	_G.PlayerFrame:RegisterEvent("UNIT_ENTERING_VEHICLE")
-	_G.PlayerFrame:RegisterEvent("UNIT_ENTERED_VEHICLE")
-	_G.PlayerFrame:RegisterEvent("UNIT_EXITING_VEHICLE")
-	_G.PlayerFrame:RegisterEvent("UNIT_EXITED_VEHICLE")
+	PlayerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+	PlayerFrame:RegisterEvent("UNIT_ENTERING_VEHICLE")
+	PlayerFrame:RegisterEvent("UNIT_ENTERED_VEHICLE")
+	PlayerFrame:RegisterEvent("UNIT_EXITING_VEHICLE")
+	PlayerFrame:RegisterEvent("UNIT_EXITED_VEHICLE")
 
 	-- User placed frames don't animate
-	_G.PlayerFrame:SetUserPlaced(true)
-	_G.PlayerFrame:SetDontSavePosition(true)
+	PlayerFrame:SetUserPlaced(true)
+	PlayerFrame:SetDontSavePosition(true)
 
 	-- Disable stagger bar events
-	_G.MonkStaggerBar:UnregisterAllEvents()
+	MonkStaggerBar:UnregisterAllEvents()
 end
 
 UIWidgets["UnitFramePet"] = function(self)
@@ -544,7 +479,7 @@ end
 
 UIWidgets["UnitFrameToT"] = function(self)
 	killUnitFrame("TargetFrameToT")
-	TargetofTarget_Update(_G.TargetFrameToT)
+	TargetofTarget_Update(TargetFrameToT)
 end
 
 UIWidgets["UnitFrameFocus"] = function(self)
@@ -556,76 +491,45 @@ UIWidgets["UnitFrameParty"] = function(self)
 	for i = 1,4 do
 		killUnitFrame(("PartyMemberFrame%.0f"):format(i))
 	end
-
-	-- Kill off the party background
-	_G.PartyMemberBackground:SetParent(UIHider)
-	_G.PartyMemberBackground:Hide()
-	_G.PartyMemberBackground:SetAlpha(0)
-
-	--hooksecurefunc("CompactPartyFrame_Generate", function() 
-	--	killUnitFrame(_G.CompactPartyFrame)
-	--	for i=1, _G.MEMBERS_PER_RAID_GROUP do
-	--		killUnitFrame(_G["CompactPartyFrameMember" .. i])
-	--	end	
-	--end)
+	PartyMemberBackground:SetParent(UIHider)
+	PartyMemberBackground:Hide()
+	PartyMemberBackground:SetAlpha(0)
 end
 
 UIWidgets["UnitFrameRaid"] = function(self)
 	-- dropdowns cause taint through the blizz compact unit frames, so we disable them
 	-- http://www.wowinterface.com/forums/showpost.php?p=261589&postcount=5
-	if _G.CompactUnitFrameProfiles then
-		_G.CompactUnitFrameProfiles:UnregisterAllEvents()
-	end
-
-	if _G.CompactRaidFrameManager and (_G.CompactRaidFrameManager:GetParent() ~= UIHider) then
-		_G.CompactRaidFrameManager:SetParent(UIHider)
-	end
-
-	_G.UIParent:UnregisterEvent("GROUP_ROSTER_UPDATE")
+	CompactUnitFrameProfiles:UnregisterAllEvents()
+	CompactRaidFrameManager:SetParent(UIHider)
+	UIParent:UnregisterEvent("GROUP_ROSTER_UPDATE")
 end
 
 UIWidgets["UnitFrameArena"] = function(self)
-	for i = 1,4 do
+	for i = 1,5 do
 		killUnitFrame(("ArenaEnemyFrame%.0f"):format(i))
 	end
-
-	-- Blizzard_ArenaUI should not be loaded
-	_G.Arena_LoadUI = function() end
-
+	Arena_LoadUI = function() end
 	SetCVar("showArenaEnemyFrames", "0", "SHOW_ARENA_ENEMY_FRAMES_TEXT")
 end
 
 UIWidgets["UnitFrameBoss"] = function(self)
-	for i = 1,4 do
+	for i = 1,MAX_BOSS_FRAMES do
 		killUnitFrame(("Boss%.0fTargetFrame"):format(i))
 	end
 end
 
-UIWidgets["WorldMap"] = function(self)
-end 
-
-UIWidgets["WorldState"] = function(self)
-end 
-
 UIWidgets["ZoneText"] = function(self)
-	local ZoneTextFrame = _G.ZoneTextFrame
-	local SubZoneTextFrame = _G.SubZoneTextFrame
-	local AutoFollowStatus = _G.AutoFollowStatus
-
 	ZoneTextFrame:SetParent(UIHider)
 	ZoneTextFrame:UnregisterAllEvents()
 	ZoneTextFrame:SetScript("OnUpdate", nil)
-	-- ZoneTextFrame:Hide()
 	
 	SubZoneTextFrame:SetParent(UIHider)
 	SubZoneTextFrame:UnregisterAllEvents()
 	SubZoneTextFrame:SetScript("OnUpdate", nil)
-	-- SubZoneTextFrame:Hide()
 	
 	AutoFollowStatus:SetParent(UIHider)
 	AutoFollowStatus:UnregisterAllEvents()
 	AutoFollowStatus:SetScript("OnUpdate", nil)
-	-- AutoFollowStatus:Hide()
 end 
 
 LibBlizzard.OnEvent = function(self, event, ...)

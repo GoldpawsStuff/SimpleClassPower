@@ -1,12 +1,3 @@
-
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "ClassPower requires LibClientBuild to be loaded.")
-
--- WoW Client Constants
-if (not LibClientBuild:IsBuild("8.0.1")) then 
-	return 
-end 
-
 -- Lua API
 local _G = _G
 local math_floor = math.floor
@@ -184,10 +175,11 @@ local Disable = function(self)
 		self:UnregisterEvent("PLAYER_LOGIN", Proxy)
 		self:UnregisterEvent("PLAYER_ALIVE", Proxy)
 		self:UnregisterEvent("CVAR_UPDATE", Proxy)
+		element:Hide()
 	end
 end 
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)), (CogWheel("LibMinimap", true)) }) do 
-	Lib:RegisterElement("ArtifactPower", Enable, Disable, Proxy, 13)
+	Lib:RegisterElement("ArtifactPower", Enable, Disable, Proxy, 15)
 end 

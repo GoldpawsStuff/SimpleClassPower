@@ -1,11 +1,7 @@
-local LibModule = CogWheel:Set("LibModule", 29)
+local LibModule = CogWheel:Set("LibModule", 35)
 if (not LibModule) then	
 	return
 end
-
--- We require this library to properly handle startup events
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "LibModule requires LibClientBuild to be loaded.")
 
 local LibMessage = CogWheel("LibMessage")
 assert(LibMessage, "LibModule requires LibMessage to be loaded.")
@@ -33,12 +29,14 @@ local string_match = string.match
 local table_concat = table.concat 
 local table_insert = table.insert
 local table_remove = table.remove
+local tonumber = tonumber
 local tostring = tostring
 local type = type
 
 -- WoW API
 local GetAddOnEnableState = _G.GetAddOnEnableState
 local GetAddOnInfo = _G.GetAddOnInfo
+local GetBuildInfo = _G.GetBuildInfo
 local GetNumAddOns = _G.GetNumAddOns
 local IsAddOnLoaded = _G.IsAddOnLoaded
 local IsLoggedIn = _G.IsLoggedIn
@@ -46,8 +44,10 @@ local IsShiftKeyDown = _G.IsShiftKeyDown
 local UnitName = _G.UnitName
 
 -- Library registries
-LibModule.addonDependencies = {} -- table holding module/widget/handler dependencies
-LibModule.addonIncompatibilities = {} -- table holding module/widget/handler incompatibilities
+LibModule.classicEnableList = LibModule.classicEnableList or {} -- table holding modules only compatible with Classic
+LibModule.classicDisableList = LibModule.classicDisableList or {} -- table holding modules incompatible with Classic
+LibModule.addonDependencies = LibModule.addonDependencies or {} -- table holding module/widget/handler dependencies
+LibModule.addonIncompatibilities = LibModule.addonIncompatibilities or {} -- table holding module/widget/handler incompatibilities
 LibModule.addonIsLoaded = LibModule.addonIsLoaded or {}
 LibModule.embeds = LibModule.embeds or {}
 LibModule.enabledModules = LibModule.enabledModules or {}
@@ -59,6 +59,7 @@ LibModule.moduleAddon = LibModule.moduleAddon or {}
 LibModule.moduleLoadPriority = LibModule.moduleLoadPriority or { HIGH = {}, NORMAL = {}, LOW = {}, PLUGIN = {} }
 LibModule.moduleName = LibModule.moduleName or {}
 LibModule.parentModule = LibModule.parentModule or {}
+LibModule.conflictLists = LibModule.conflictLists or {}
 
 -- Library constants
 local PRIORITY_HASH = { HIGH = true, NORMAL = true, LOW = true, PLUGIN = true } -- hashed priority table, for faster validity checks
@@ -66,6 +67,8 @@ local PRIORITY_INDEX = { "HIGH", "NORMAL", "LOW", "PLUGIN" } -- indexed/ordered 
 local DEFAULT_MODULE_PRIORITY = "NORMAL" -- default load priority for new modules
 
 -- Speed shortcuts
+local classicEnableList = LibModule.classicEnableList
+local classicDisableList = LibModule.classicDisableList
 local addonDependencies = LibModule.addonDependencies
 local addonIncompatibilities = LibModule.addonIncompatibilities
 local addonIsLoaded = LibModule.addonIsLoaded
@@ -76,6 +79,7 @@ local moduleAddon = LibModule.moduleAddon
 local moduleName = LibModule.moduleName 
 local modules = LibModule.modules
 local parentModule = LibModule.parentModule
+local conflictLists = LibModule.conflictLists
 
 -- Set up the global debug frame
 do 
@@ -201,7 +205,18 @@ end
 -------------------------------------------------------------
 local ModuleProtoType = {
 	Init = function(self, ...)
-		if (self:IsIncompatible() or self:DependencyFailed()) then
+		local isIncompatible, conflictingAddon = self:IsIncompatible()
+		if (isIncompatible) then 
+			if (self:IsTopLevel()) then 
+				local ourAddon = self:GetAddon()
+				if (ourAddon) and (conflictLists[ourAddon] ~= conflictingAddon) then
+					conflictLists[conflictingAddon] = ourAddon
+					local ourName = GetAddOnMetadata(ourAddon, "Title") or ourAddon
+					local conflictingAddonName = GetAddOnMetadata(conflictingAddon, "Title") or conflictingAddon
+					print(("|cffcc0000Cannot have both |r|cff888888'|r%s|cff888888'|r|cffcc0000 and |r|cff888888'|r%s|cff888888'|r|cffcc0000 enabled!"):format(ourName, conflictingAddonName))
+				end 
+			end 
+		elseif (self:DependencyFailed()) then
 			return
 		end
 
@@ -295,14 +310,18 @@ local ModuleProtoType = {
 		if (not addonIncompatibilities[self]) then
 			return false
 		end
+		local thisAddon = moduleAddon[self]
 		for addonName, condition in pairs(addonIncompatibilities[self]) do
-			if (type(condition) == "function") then
-				if LibModule:IsAddOnEnabled(addonName) then
-					return condition(self)
-				end
-			else
-				if LibModule:IsAddOnEnabled(addonName) then
-					return true
+			-- Don't fire as incompatible if self is on the list
+			if (addonName ~= thisAddon) then
+				if (type(condition) == "function") then
+					if LibModule:IsAddOnEnabled(addonName) then
+						return condition(self), addonName
+					end
+				else
+					if LibModule:IsAddOnEnabled(addonName) then
+						return true, addonName
+					end
 				end
 			end
 		end
@@ -334,13 +353,13 @@ local ModuleProtoType = {
 		if (not addonIncompatibilities[self]) then
 			addonIncompatibilities[self] = {}
 		end
+		local thisAddon = moduleAddon[self]
 		local numArgs = select("#", ...)
 		local currentArg = 1
 
 		while currentArg <= numArgs do
 			local addonName = select(currentArg, ...)
 			check(addonName, currentArg, "string")
-
 			local condition
 			if (numArgs > currentArg) then
 				local nextArg = select(currentArg + 1, ...)
@@ -350,7 +369,10 @@ local ModuleProtoType = {
 				end
 			end
 			currentArg = currentArg + 1
-			addonIncompatibilities[self][addonName] = condition and condition or true
+			-- Don't add self to the list
+			if (thisAddon ~= addonName) then 
+				addonIncompatibilities[self][addonName] = condition and condition or true
+			end
 		end
 	end,
 
@@ -536,13 +558,16 @@ local ModuleProtoType = {
 
 			-- colorize numbers yellow
 			-- *DO THIS FIRST
-			msg = msg:gsub("(%d+)", "|cffffd200%1|r") 
+			msg = msg:gsub("(%A)(%d+)", "%1|cffffd200%2|r") 
 
 			-- colorize chat commands blue
 			msg = msg:gsub("/(%w+)", "|cff77aaff/%1|r") 
 
 			-- camelcase or other words suspected to be code references
 			msg = msg:gsub("(%u?)(%l+)(%u)(%l+)", "|cff33ff33%1%2%3%4|r") 
+
+			-- assume bracketed entries are intended to be highlighted
+			msg = msg:gsub("%[(.-)%]", "|cff33ff33%1|r") 
 
 			-- color strings red
 			msg = msg:gsub("\"(.-)\"", "|cffa0a0a0\"|r|cffff8833%1|r|cffa0a0a0\"|r") 
@@ -646,14 +671,11 @@ LibModule.NewModule = function(self, name, ...)
 end
 
 -- Retrieve a previously registered module
-LibModule.GetModule = function(self, name, silentFail)
+LibModule.GetModule = function(self, name)
 	check(name, 1, "string")
 	check(silentFail, 2, "boolean", "nil")
 	if self.modules[name] then
 		return self.modules[name]
-	end
-	if (not silentFail) then
-		return error(("Bad argument #%.0f to '%s': No module named '%s' exist!"):format(1, "Get", name))
 	end
 end
 
@@ -730,6 +752,17 @@ LibModule.IsAddOnEnabled = function(self, target)
 			if enabled then
 				return true
 			end
+		end
+	end
+end
+
+-- Check if an addon exists	in the addon listing
+LibModule.IsAddOnAvailable = function(self, target)
+	local target = string_lower(target)
+	for i = 1,GetNumAddOns() do
+		local name, title, notes, enabled, loadable, reason, security = _GetAddOnInfo(i)
+		if string_lower(name) == target then
+			return true
 		end
 	end
 end

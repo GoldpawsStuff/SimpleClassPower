@@ -1,4 +1,4 @@
-local LibClientBuild = CogWheel:Set("LibClientBuild", 26)
+local LibClientBuild = CogWheel:Set("LibClientBuild", 30)
 if (not LibClientBuild) then
 	return
 end
@@ -7,6 +7,7 @@ end
 local _G = _G
 local pairs = pairs
 local select = select
+local string_match = string.match
 local tonumber = tonumber
 local tostring = tostring
 
@@ -17,7 +18,7 @@ clientBuild = tonumber(clientBuild)
 
 local clientIsAtLeast = {}
 local builds = {
-	["Classic"] = 6141, ["Vanilla"] = 6141,
+	["Vanilla"] = 6141,
 		["0.5.3"] 	= 3368, 
 		["0.5.5"] 	= 3494, 
 		["0.6"] 	= 3592, -- Rest state, Inns, Hearthstone, Guilds. Scarlet Monestary + Blackfathom Depths. 
@@ -191,18 +192,28 @@ local builds = {
 
 	["Battle for Azeroth"] = 27101, ["BfA"] = 27101, 
 		["8.0.1"] 	= 27101, 
-		["8.1.0"] 	= 29600, -- March 5th, 2019 
-		["8.1.5"] 	= 29704, -- March 12th 2019 
-		["8.2.0"] 	= 30920  -- June 25th 2019 
+		["8.1.0"] 	= 29600, 
+		["8.1.5"] 	= 29704, 
+		["8.2.0"] 	= 30920, 
+		["8.2.0"] 	= 31229, 
 
+	["Classic"] = 31407, 
+		["1.13.2"] = 31407, -- August 8th 2019 Pre-Launch build
 }
 
 -- This should only be required when a PTR patch's build 
 -- is lower than the lower retail patch's build!
--- Example: ["BfA"] = "8.0.1", ["8.0.1"] = "8.0.1"
+-- 
+-- The [key] is the name we query it by, what we call it, 
+-- while the "value" is what GetBuildInfo() would return. 
+-- 
+-- Examples: 
+-- ["BfA"] = "8.0.1", 
+-- ["8.0.1"] = "8.0.1"
 local patchExceptions = {
 	["8.1.0"] = "8.1.0",
-	["8.1.5"] = "8.1.5"
+	["8.1.5"] = "8.1.5",
+	["1.13.2"] = "1.13.2" -- Classic!
 }
 
 for version, build in pairs(builds) do

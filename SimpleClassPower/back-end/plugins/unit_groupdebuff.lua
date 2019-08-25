@@ -376,7 +376,7 @@ local Enable = function(self)
 
 		self:RegisterEvent("UNIT_AURA", Proxy)
 		self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", Proxy, true)
-	
+
 		return true
 	end
 end 
@@ -394,5 +394,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("GroupAura", Enable, Disable, Proxy, 8)
+	Lib:RegisterElement("GroupAura", Enable, Disable, Proxy, 10)
 end 
