@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.13-Release] 2019-08-25
+### Changed
+- Various back-end updates. 
+- Updated entries in the TOC file.  
+
 ## [2.0.12-Release] 2019-08-05
 ### Fixed
 - Fixed a potential incompatibility with HandyNotes in the back-end. 
