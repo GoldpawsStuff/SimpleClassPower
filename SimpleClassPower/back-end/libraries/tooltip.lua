@@ -1,29 +1,32 @@
-local LibTooltip = CogWheel:Set("LibTooltip", 55)
-if (not LibTooltip) then	
+local LibTooltip = Wheel:Set("LibTooltip", 83)
+if (not LibTooltip) then
 	return
 end
 
-local LibClientBuild = CogWheel("LibClientBuild")
+local LibClientBuild = Wheel("LibClientBuild")
 assert(LibClientBuild, "LibTooltip requires LibClientBuild to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibTooltip requires LibEvent to be loaded.")
 
-local LibSecureHook = CogWheel("LibSecureHook")
+local LibSecureHook = Wheel("LibSecureHook")
 assert(LibSecureHook, "LibTooltip requires LibSecureHook to be loaded.")
 
-local LibFrame = CogWheel("LibFrame")
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "LibTooltip requires LibFrame to be loaded.")
 
-local LibZone = CogWheel("LibZone")
+local LibZone = Wheel("LibZone")
 assert(LibZone, "LibTooltip requires LibZone to be loaded.")
 
-local LibTooltipScanner = CogWheel("LibTooltipScanner")
+local LibTooltipScanner = Wheel("LibTooltipScanner")
 assert(LibTooltipScanner, "LibTooltip requires LibTooltipScanner to be loaded.")
 
-local LibStatusBar = CogWheel("LibStatusBar")
+local LibStatusBar = Wheel("LibStatusBar")
 assert(LibStatusBar, "LibTooltip requires LibStatusBar to be loaded.")
 
+local LibPlayerData = Wheel("LibPlayerData")
+assert(LibPlayerData, "LibTooltip requires LibPlayerData to be loaded.")
+ 
 -- Embed functionality into the library
 LibFrame:Embed(LibTooltip)
 LibEvent:Embed(LibTooltip)
@@ -56,26 +59,34 @@ local type = type
 local unpack = unpack
 
 -- WoW API 
-local GetBestMapForUnit = _G.C_Map.GetBestMapForUnit
-local GetCVarBool = _G.GetCVarBool
-local GetQuestGreenRange = _G.GetQuestGreenRange
-local GetTime = _G.GetTime
-local hooksecurefunc = _G.hooksecurefunc
-local UnitClass = _G.UnitClass
-local UnitExists = _G.UnitExists
-local UnitHealth = _G.UnitHealth
-local UnitHealthMax = _G.UnitHealthMax
-local UnitIsConnected = _G.UnitIsConnected
-local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
-local UnitIsPlayer = _G.UnitIsPlayer
-local UnitIsTapDenied = _G.UnitIsTapDenied
-local UnitIsUnit = _G.UnitIsUnit
-local UnitLevel = _G.UnitLevel
-local UnitPlayerControlled = _G.UnitPlayerControlled
-local UnitPower = _G.UnitPower
-local UnitPowerMax = _G.UnitPowerMax
-local UnitPowerType = _G.UnitPowerType
-local UnitReaction = _G.UnitReaction
+local GetBestMapForUnit = C_Map.GetBestMapForUnit
+local GetCVarBool = GetCVarBool
+local GetQuestGreenRange = GetQuestGreenRange
+local GetScalingQuestGreenRange = GetScalingQuestGreenRange
+local GetTime = GetTime
+local hooksecurefunc = hooksecurefunc
+local UnitClass = UnitClass
+local UnitEffectiveLevel = UnitEffectiveLevel
+local UnitExists = UnitExists
+local UnitHealth = UnitHealth
+local UnitHealthMax = UnitHealthMax
+local UnitIsConnected = UnitIsConnected
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitIsPlayer = UnitIsPlayer
+local UnitIsTapDenied = UnitIsTapDenied
+local UnitIsUnit = UnitIsUnit
+local UnitLevel = UnitLevel
+local UnitPlayerControlled = UnitPlayerControlled
+local UnitPower = UnitPower
+local UnitPowerMax = UnitPowerMax
+local UnitPowerType = UnitPowerType
+local UnitQuestTrivialLevelRange = UnitQuestTrivialLevelRange or GetQuestGreenRange
+local UnitQuestTrivialLevelRangeScaling = UnitQuestTrivialLevelRangeScaling or GetScalingQuestGreenRange
+local UnitReaction = UnitReaction
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 -- Library Registries
 LibTooltip.embeds = LibTooltip.embeds or {} -- modules and libs that embed this
@@ -91,7 +102,7 @@ LibTooltip.numTooltips = LibTooltip.numTooltips or 0 -- current number of toolti
 LibTooltip.blizzardBackdrops = LibTooltip.blizzardBackdrops or {}
 
 -- Inherit the template too, we override the older methods farther down anyway
-LibTooltip.tooltipTemplate = LibTooltip.tooltipTemplate or LibTooltip:CreateFrame("GameTooltip", "CG_TooltipTemplate", "UICenter")
+LibTooltip.tooltipTemplate = LibTooltip.tooltipTemplate or LibTooltip:CreateFrame("GameTooltip", "GP_TooltipTemplate", "UICenter")
 
 -- Shortcuts
 local Defaults = LibTooltip.defaults
@@ -106,7 +117,7 @@ local Backdrops = LibTooltip.blizzardBackdrops
 -- Constants we might change or make variable later on
 local TEXT_INSET = 10 -- text insets from tooltip edges
 local RIGHT_PADDING= 40 -- padding between left and right messages
-local LINE_PADDING = 4 -- padding between lines of text
+local LINE_PADDING = 2 -- padding between lines of text
 
 -- Fonts
 local FONT_TITLE = Game15Font_o1 
@@ -114,11 +125,14 @@ local FONT_NORMAL = Game13Font_o1 -- Game12Font_o1
 local FONT_VALUE = Game13Font_o1
 
 -- Blizzard textures we use 
-local BOSS_TEXTURE = "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:16:16:-2:1|t"
-local FFA_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-FFA:16:12:-2:1:64:64:6:34:0:40|t"
-local FACTION_ALLIANCE_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Alliance:16:12:-2:1:64:64:6:34:0:40|t"
-local FACTION_NEUTRAL_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Neutral:16:12:-2:1:64:64:6:34:0:40|t"
-local FACTION_HORDE_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Horde:16:16:-4:0:64:64:0:40:0:40|t"
+local BOSS_TEXTURE = "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:14:14:-2:1|t" -- 1:1
+local FFA_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-FFA:14:10:-2:1:64:64:6:34:0:40|t" -- 4:3
+local FACTION_ALLIANCE_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Alliance:14:10:-2:1:64:64:6:34:0:40|t" -- 4:3
+local FACTION_NEUTRAL_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Neutral:14:10:-2:1:64:64:6:34:0:40|t" -- 4:3
+local FACTION_HORDE_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Horde:14:14:-4:0:64:64:0:40:0:40|t" -- 1:1
+
+-- Player constants
+local englishPlayerFaction, localizedPlayerFaction = UnitFactionGroup("player")
 
 -- Blizzard tooltips
 local blizzardTips = {
@@ -132,7 +146,7 @@ local blizzardTips = {
 	"ShoppingTooltip1",
 	"ShoppingTooltip2",
 	"ShoppingTooltip3",
-	"WorldMapTooltip", -- Deprecated in 8.1.5
+	--"WorldMapTooltip", -- Deprecated in 8.1.5 > GameTooltip
 	"WorldMapCompareTooltip1",
 	"WorldMapCompareTooltip2",
 	"WorldMapCompareTooltip3",
@@ -170,7 +184,6 @@ local fakeBackdrop = {
 local fakeBackdropColor = { 0, 0, 0, .95 }
 local fakeBackdropBorderColor = { .3, .3, .3, 1 }
 
-
 -- Utility Functions
 ---------------------------------------------------------
 -- Syntax check 
@@ -183,7 +196,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 -- Prefix and camel case a word (e.g. 'name' >> 'prefixName' )
@@ -261,7 +274,7 @@ local createNewLinePair = function(tooltip, lineIndex)
 	left:SetFontObject((lineIndex == 1) and FONT_TITLE or FONT_NORMAL)
 	left:SetTextColor(tooltip.colors.offwhite[1], tooltip.colors.offwhite[2], tooltip.colors.offwhite[3])
 	left:SetJustifyH("LEFT")
-	left:SetJustifyV("TOP")
+	left:SetJustifyV("MIDDLE")
 	left:SetIndentedWordWrap(false)
 	left:SetWordWrap(false)
 	left:SetNonSpaceWrap(false)
@@ -275,7 +288,7 @@ local createNewLinePair = function(tooltip, lineIndex)
 	right:SetFontObject((lineIndex == 1) and FONT_TITLE or FONT_NORMAL)
 	right:SetTextColor(tooltip.colors.offwhite[1], tooltip.colors.offwhite[2], tooltip.colors.offwhite[3])
 	right:SetJustifyH("RIGHT")
-	right:SetJustifyV("TOP") 
+	right:SetJustifyV("MIDDLE") 
 	right:SetIndentedWordWrap(false)
 	right:SetWordWrap(false)
 	right:SetNonSpaceWrap(false)
@@ -291,21 +304,6 @@ local createNewLinePair = function(tooltip, lineIndex)
 	-- Align the new line
 	alignLine(tooltip, lineIndex)
 end 
-
--- Number abbreviations
-local short = function(value)
-	value = tonumber(value)
-	if (not value) then return "" end
-	if (value >= 1e9) then
-		return ("%.1fb"):format(value / 1e9):gsub("%.?0+([kmb])$", "%1")
-	elseif value >= 1e6 then
-		return ("%.1fm"):format(value / 1e6):gsub("%.?0+([kmb])$", "%1")
-	elseif value >= 1e3 or value <= -1e3 then
-		return ("%.1fk"):format(value / 1e3):gsub("%.?0+([kmb])$", "%1")
-	else
-		return tostring(math_floor(value))
-	end	
-end
 
 -- Time constants
 local DAY, HOUR, MINUTE = 86400, 3600, 60
@@ -327,33 +325,15 @@ local formatTime = function(time)
 	end	
 end
 
-
--- zhCN exceptions
-local gameLocale = GetLocale()
-if (gameLocale == "zhCN") then 
-	short = function(value)
-		value = tonumber(value)
-		if (not value) then return "" end
-		if (value >= 1e8) then
-			return ("%.1f亿"):format(value / 1e8):gsub("%.?0+([km])$", "%1")
-		elseif value >= 1e4 or value <= -1e3 then
-			return ("%.1f万"):format(value / 1e4):gsub("%.?0+([km])$", "%1")
-		else
-			return tostring(math_floor(value))
-		end 
-	end
-end 
-
-
 -- Default Color & Texture Tables
 --------------------------------------------------------------------------
 local Colors = {
 
 	-- some basic ui colors used by all text
-	normal = prepare( 229/255, 178/255, 38/255 ),
-	highlight = prepare( 250/255, 250/255, 250/255 ),
-	offwhite = prepare( 196/255, 196/255, 196/255 ), 
-	title = prepare( 255/255, 234/255, 137/255 ),
+	normal = prepare(229/255, 178/255, 38/255),
+	highlight = prepare(250/255, 250/255, 250/255),
+	offwhite = prepare(196/255, 196/255, 196/255), 
+	title = prepare(255/255, 234/255, 137/255),
 
 	-- health bar coloring
 	health = prepare( 25/255, 178/255, 25/255 ),
@@ -373,17 +353,17 @@ local Colors = {
 	-- class and reaction
 	class = prepareGroup(RAID_CLASS_COLORS),
 	reaction = prepareGroup(FACTION_BAR_COLORS),
-	quality = prepareGroup(ITEM_QUALITY_COLORS),
-	
-	-- zone names
-	zone = {
-		arena = prepare( 175/255, 76/255, 56/255 ),
-		combat = prepare( 175/255, 76/255, 56/255 ),
-		contested = prepare( 229/255, 159/255, 28/255 ),
-		friendly = prepare( 64/255, 175/255, 38/255 ),
-		hostile = prepare( 175/255, 76/255, 56/255 ),
-		sanctuary = prepare( 104/255, 204/255, 239/255 ),
-		unknown = prepare( 255/255, 234/255, 137/255 ) -- instances, bgs, contested zones on pve realms 
+	blizzquality = prepareGroup(ITEM_QUALITY_COLORS),
+	quality = {
+		[0] = prepare( 157/255, 157/255, 157/255 ), -- Poor
+		[1] = prepare( 240/255, 240/255, 240/255 ), -- Common
+		[2] = prepare(  30/255, 178/255,   0/255 ), -- Uncommon
+		[3] = prepare(   0/255, 112/255, 221/255 ), -- Rare
+		[4] = prepare( 163/255,  53/255, 238/255 ), -- Epic
+		[5] = prepare( 255/255, 128/255,   0/255 ), -- Legendary
+		[6] = prepare( 230/255, 204/255, 128/255 ), -- Artifact
+		[7] = prepare(   0/255, 204/255, 255/255 ), -- Heirloom
+		[8] = prepare(   0/255, 204/255, 255/255 )  -- Blizard
 	},
 
 	-- magic school coloring
@@ -406,30 +386,6 @@ for powerType, powerColor in pairs(PowerBarColor) do
 		end  
 	end 
 end 
-
--- Add support for custom class colors
-local customClassColors = function()
-	if CUSTOM_CLASS_COLORS then
-		local updateColors = function()
-			Colors.class = prepareGroup(CUSTOM_CLASS_COLORS)
-			for frame in pairs(frames) do 
-				frame:UpdateAllElements("CustomClassColors", frame.unit)
-			end 
-		end
-		updateColors()
-		CUSTOM_CLASS_COLORS:RegisterCallback(updateColors)
-		return true
-	end
-end
-if (not customClassColors()) then
-	LibTooltip.CustomClassColors = function(self, event, ...)
-		if customClassColors() then
-			self:UnregisterEvent("ADDON_LOADED", "CustomClassColors")
-			self.Listener = nil
-		end
-	end 
-	LibTooltip:RegisterEvent("ADDON_LOADED", "CustomClassColors")
-end
 
 -- Library hardcoded fallbacks
 local LibraryDefaults = {
@@ -460,7 +416,6 @@ local LibraryDefaults = {
 -- Assign the library hardcoded defaults as fallbacks 
 setmetatable(Defaults, { __index = LibraryDefaults } )
 
-
 -- Tooltip Template
 ---------------------------------------------------------
 local Tooltip_MT = { __index = Tooltip }
@@ -469,7 +424,6 @@ local Tooltip_MT = { __index = Tooltip }
 local FrameMethods = getmetatable(CreateFrame("Frame")).__index
 local Blizzard_SetScript = FrameMethods.SetScript
 local Blizzard_GetScript = FrameMethods.GetScript
-
 
 -- Retrieve a tooltip specific setting
 Tooltip.GetCValue = function(self, name)
@@ -687,12 +641,6 @@ Tooltip.GetBar = function(self, barIndex)
 	return self.bars[barIndex]
 end
 
-Tooltip.GetHealthBar = function(self, barIndex)
-end
-
-Tooltip.GetPowerBar = function(self, barIndex)
-end
-
 -- Update the color of the tooltip's current unit
 -- Returns the r, g, b value
 Tooltip.GetUnitHealthColor = function(self, unit)
@@ -770,6 +718,71 @@ Tooltip.GetUnitPowerColor = function(self, unit)
 	end
 	return r, g, b
 end 
+
+-- Returns the correct difficulty color compared to the player.
+-- Using this as a tooltip method to access our custom colors.
+if (IsClassic) then
+	Tooltip.GetDifficultyColorByLevel = function(self, level, isScaling)
+		local colors = self.colors.quest
+		local levelDiff = level - UnitLevel("player")
+		if (isScaling) then
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= 0) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= GetScalingQuestGreenRange()) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		else
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= -2) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= GetQuestGreenRange()) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		end
+	end
+elseif (IsRetail) then
+	Tooltip.GetDifficultyColorByLevel = function(self, level, isScaling)
+		local colors = self.colors.quest
+		if (isScaling) then
+			local levelDiff = level - UnitEffectiveLevel("player")
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= 0) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= -UnitQuestTrivialLevelRangeScaling("player")) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		else
+			local levelDiff = level - UnitLevel("player")
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= -4) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= -UnitQuestTrivialLevelRange("player")) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		end
+	end
+end
 
 -- Mimic the UIParent scale regardless of what the effective scale is
 Tooltip.UpdateScale = function(self)
@@ -1017,12 +1030,9 @@ Tooltip.SetBarHeight = function(self, barHeight, barType)
 	self:UpdateBackdropLayout()
 end 
 
-
-
 -- Rewritten Tooltip API
 -- *Blizz compatibility and personal additions
 ---------------------------------------------------------
-
 Tooltip.SetOwner = function(self, owner, anchor)
 	self:Hide()
 	self:ClearAllPoints()
@@ -1065,26 +1075,6 @@ Tooltip.SetSmartAnchor = function(self, parent, offsetX, offsetY)
 	self:Place(point, parent, rPoint, offsetX, offsetY)
 end 
 
-
--- Returns the correct difficulty color compared to the player.
--- Using this as a tooltip method to access our custom colors.
-Tooltip.GetDifficultyColorByLevel = function(self, level)
-	local colors = self.colors.quest
-
-	level = level - UnitLevel("player") -- LEVEL
-	if (level > 4) then
-		return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
-	elseif (level > 2) then
-		return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
-	elseif (level >= -2) then
-		return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
-	elseif (level >= -GetQuestGreenRange()) then
-		return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
-	else
-		return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
-	end
-end
-
 Tooltip.SetAction = function(self, slot)
 	if (not self.owner) then
 		self:Hide()
@@ -1092,8 +1082,7 @@ Tooltip.SetAction = function(self, slot)
 	end
 
 	-- Switch to item function if the action is an item
-	local actionType, id = GetActionInfo(slot)
-	if (actionType == "item") then 
+	if (self:IsActionItem(slot)) then 
 		return self:SetActionItem(slot)
 	end 
 
@@ -1116,6 +1105,20 @@ Tooltip.SetAction = function(self, slot)
 			self:AddLine(data.name, colors.title[1], colors.title[2], colors.title[3], true)
 		end 
 
+		if data.isAutoAttack then 
+			if (data.attackSpeed) then 
+				self:AddLine(INVTYPE_WEAPONMAINHAND, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true)
+				self:AddDoubleLine(string_format(DAMAGE_TEMPLATE, data.attackMinDamage, data.attackMaxDamage), STAT_SPEED .. " " .. data.attackSpeed, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true, true)
+				self:AddLine(string_format(DPS_TEMPLATE, data.attackDPS), colors.quest.green[1], colors.quest.green[2], colors.quest.green[3])
+			end 
+			if (data.attackDPSOffHand) then 
+				self:AddLine(" ")
+				self:AddLine(INVTYPE_WEAPONOFFHAND, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true)
+				self:AddDoubleLine(string_format(DAMAGE_TEMPLATE, data.attackMinDamageOffHand, data.attackMaxDamageOffHand), STAT_SPEED .. " " .. data.attackSpeedOffHand, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true, true)
+				self:AddLine(string_format(DPS_TEMPLATE, data.attackDPSOffHand), colors.quest.green[1], colors.quest.green[2], colors.quest.green[3])
+			end 
+		end 
+
 		-- Cost and range
 		if (data.spellCost or data.spellRange) then 
 			if (data.spellRange and data.spellCost) then 
@@ -1125,7 +1128,7 @@ Tooltip.SetAction = function(self, slot)
 				self:AddLine(data.spellRange, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true)
 
 			elseif data.spellCost then 
-				self:AddLine(data.spellCost, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true, true)
+				self:AddLine(data.spellCost, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3], true)
 			end 
 		end 
 
@@ -1258,7 +1261,6 @@ Tooltip.SetActionItem = function(self, slot)
 				self:AddLine(string_format(DPS_TEMPLATE, string_format("%.1f", data.itemDPS+.05)), colors.highlight[1], colors.highlight[2], colors.highlight[3])
 			end 
 
-			local stat1R, stat1G, stat1B = colors.normal[1], colors.normal[2], colors.normal[3]
 			local statR, statG, statB = colors.quest.green[1], colors.quest.green[2], colors.quest.green[3] 
 			
 			-- armor 
@@ -1273,15 +1275,20 @@ Tooltip.SetActionItem = function(self, slot)
 
 			-- parry?
 
-			-- primary stat
+			-- primary stats
 			if data.primaryStatValue and (data.primaryStatValue ~= 0) then 
-				self:AddLine(string_format("%s %s", (data.primaryStatValue > 0) and ("+"..tostring(data.primaryStatValue)) or tostring(data.primaryStatValue), data.primaryStat), stat1R, stat1G, stat1B)
+				self:AddLine(string_format("%s %s", (data.primaryStatValue > 0) and ("+"..tostring(data.primaryStatValue)) or tostring(data.primaryStatValue), data.primaryStat), statR, statG, statB)
 
+			end 
+			if data.primaryStats then 
+				for key,value in pairs(data.primaryStats) do 
+					self:AddLine(string_format("%s %s", (value > 0) and ("+"..tostring(value)) or tostring(value), _G[key]), statR, statG, statB)
+				end 
 			end 
 
 			-- stamina
 			if data.itemStamina and (data.itemStamina ~= 0) then 
-				self:AddLine(string_format("%s %s", (data.itemStamina > 0) and ("+"..tostring(data.itemStamina)) or tostring(data.itemStamina), ITEM_MOD_STAMINA_SHORT), stat1R, stat1G, stat1B)
+				self:AddLine(string_format("%s %s", (data.itemStamina > 0) and ("+"..tostring(data.itemStamina)) or tostring(data.itemStamina), ITEM_MOD_STAMINA_SHORT), statR, statG, statB)
 
 			end 
 
@@ -1443,22 +1450,31 @@ Tooltip.SetUnit = function(self, unit)
 			-- name 
 			local displayName = data.name
 			if data.isPlayer then 
-				if data.isFFA then
-					displayName = FFA_TEXTURE .. " " .. displayName
-				elseif (data.isPVP and data.englishFaction) then
-					if (data.englishFaction == "Horde") then
-						displayName = FACTION_HORDE_TEXTURE .. " " .. displayName
-					elseif (data.englishFaction == "Alliance") then
-						displayName = FACTION_ALLIANCE_TEXTURE .. " " .. displayName
-					elseif (data.englishFaction == "Neutral") then
-						-- They changed this to their new atlas garbage in Legion, 
-						-- so for the sake of simplicty we'll just use the FFA PvP icon instead. Works.
+				if (data.showPvPFactionWithName) then 
+					if data.isFFA then
 						displayName = FFA_TEXTURE .. " " .. displayName
+					elseif (data.isPVP and data.englishFaction) then
+						if (data.englishFaction == "Horde") then
+							displayName = FACTION_HORDE_TEXTURE .. " " .. displayName
+						elseif (data.englishFaction == "Alliance") then
+							displayName = FACTION_ALLIANCE_TEXTURE .. " " .. displayName
+						elseif (data.englishFaction == "Neutral") then
+							-- They changed this to their new atlas garbage in Legion, 
+							-- so for the sake of simplicty we'll just use the FFA PvP icon instead. Works.
+							displayName = FFA_TEXTURE .. " " .. displayName
+						end
 					end
+				end
+				if (data.pvpRankName) then 
+					displayName = displayName .. colors.quest.gray.colorCode.. " (" .. data.pvpRankName .. ")|r"
 				end
 			else 
 				if data.isBoss then
 					displayName = BOSS_TEXTURE .. " " .. displayName
+				elseif (data.classification == "rare") or (data.classification == "rareelite") then
+					displayName = displayName .. colors.quality[3].colorCode .. " (" .. ITEM_QUALITY3_DESC .. ")|r"
+				elseif (data.classification == "elite") then 
+					displayName = displayName .. colors.title.colorCode .. " (" .. ELITE .. ")|r"
 				end
 			end
 
@@ -1479,63 +1495,101 @@ Tooltip.SetUnit = function(self, unit)
 				self:AddLine(displayName, r, g, b, true)
 			end 
 
-			-- titles
-			-- *add player title to a separate line, same as with npc titles?
-			if data.title then 
-				self:AddLine(data.title, colors.normal[1], colors.normal[2], colors.normal[3], true)
-			end 
-
 			-- Players
 			if data.isPlayer then 
-				if data.guild then 
-					self:AddLine(data.guild, colors.title[1], colors.title[2], colors.title[3])
-				end  
+				if data.isDead then 
+					self:AddLine(data.isGhost and DEAD or CORPSE, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+				else 
+					if data.guild then 
+						self:AddLine("<"..data.guild..">", colors.title[1], colors.title[2], colors.title[3])
+					end  
 
-				local levelLine
+					local levelLine
 
-				if data.raceDisplayName then 
-					levelLine = (levelLine and levelLine.." " or "") .. data.raceDisplayName
-				end 
-
-				if (data.classDisplayName and data.class) then 
-					if self.colorClass then 
-						levelLine = (levelLine and levelLine.." " or "") .. colors.class[data.class].colorCode .. data.classDisplayName .. "|r"
-					else 
-						levelLine = (levelLine and levelLine.." " or "") .. data.classDisplayName
+					if data.raceDisplayName then 
+						levelLine = (levelLine and levelLine.." " or "") .. data.raceDisplayName
 					end 
-				end 
 
-				if levelLine then 
-					self:AddLine(levelLine, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
-				end 
+					if (data.classDisplayName and data.class) then 
+						if self.colorClass then 
+							levelLine = (levelLine and levelLine.." " or "") .. colors.class[data.class].colorCode .. data.classDisplayName .. "|r"
+						else 
+							levelLine = (levelLine and levelLine.." " or "") .. data.classDisplayName
+						end 
+					end 
 
-				-- player faction (Horde/Alliance/Neutral)
-				if data.localizedFaction then 
-					self:AddLine(data.localizedFaction)
-				end 
+					if levelLine then 
+						self:AddLine(levelLine, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+					end 
 
-
-			-- Battle Pets
-			elseif data.isPet then 
-
+					-- player faction (Horde/Alliance/Neutral)
+					if data.localizedFaction then 
+						self:AddLine(data.localizedFaction, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+					end 
+				end
 
 			-- All other NPCs
-			else  
-				if data.city then 
-					self:AddLine(data.city, colors.title[1], colors.title[2], colors.title[3])
-				end 
+			else 
 
-				-- Beast etc 
-				if data.creatureFamily then 
-					self:AddLine(data.creatureType, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+				if data.isDead then 
+					self:AddLine(data.isGhost and DEAD or CORPSE, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
 
-				-- Humanoid, Crab, etc 
-				elseif data.creatureType then 
-					self:AddLine(data.creatureType, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
-				end  
+					if (data.isSkinnable) then 
+						self:AddLine(data.skinnableMsg, data.skinnableColor[1], data.skinnableColor[2], data.skinnableColor[3])
+					end
+				else 
+					-- titles
+					if data.title then 
+						self:AddLine("<"..data.title..">", colors.normal[1], colors.normal[2], colors.normal[3], true)
+					end 
+
+					if data.city then 
+						self:AddLine(data.city, colors.title[1], colors.title[2], colors.title[3])
+					end 
+
+					-- Beast etc 
+					if data.creatureFamily then 
+						self:AddLine(data.creatureFamily, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+
+					-- Humanoid, Crab, etc 
+					elseif data.creatureType then 
+						self:AddLine(data.creatureType, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+					end 
+
+					-- player faction (Horde/Alliance/Neutral)
+					if data.localizedFaction then 
+						self:AddLine(data.localizedFaction, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+					end 
+
+					if (data.isCivilian) then 
+						self:AddLine(PVP_RANK_CIVILIAN, data.civilianColor[1], data.civilianColor[2], data.civilianColor[3])
+					end
+				end
+
+				if (data.objectives) then
+					for objectiveID, objectiveData in ipairs(data.objectives) do
+						self:AddLine(" ")
+						self:AddLine(objectiveData.questTitle, colors.title[1], colors.title[2], colors.title[3])
+
+						for objectiveID, questObjectiveData in ipairs(objectiveData.questObjectives) do
+							local objectiveType = questObjectiveData.objectiveType
+							if (objectiveType == "incomplete") then
+								self:AddLine(questObjectiveData.objectiveText, colors.quest.gray[1], colors.quest.gray[2], colors.quest.gray[3])
+							elseif (objectiveType == "complete") then
+								self:AddLine(questObjectiveData.objectiveText, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+							elseif (objectiveType == "failed") then
+								self:AddLine(questObjectiveData.objectiveText, colors.quest.red[1], colors.quest.red[2], colors.quest.red[3])
+							else
+								-- Fallback for unknowns.
+								self:AddLine(questObjectiveData.objectiveText, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
+							end
+						end
+					end
+				end
+
 			end 
 
-			if data.uiMapID then 
+			if (data.uiMapID) then 
 				local uiMapID = GetBestMapForUnit("player")
 				if (uiMapID ~= data.uiMapID) then 
 					-- Color according to the faction of the tooltip unit's current zone, 
@@ -1642,9 +1696,13 @@ local ShowAuraTooltip = function(self, data)
 	-- we make sure the bars are reset!
 	self:ClearStatusBars(true) -- suppress layout updates
 
-	self:AddLine(data.name, colors.title[1], colors.title[2], colors.title[3], true)
+	if (data.debuffTypeLabel) then 
+		self:AddDoubleLine(data.name, data.debuffTypeLabel, colors.title[1], colors.title[2], colors.title[3], colors.quest.gray[1], colors.quest.gray[2], colors.quest.gray[3], true, true)
+	else
+		self:AddLine(data.name, colors.title[1], colors.title[2], colors.title[3], true)
+	end 
 
-	if data.spellId then 
+	if (data.spellId and (not self.hideSpellID)) then 
 		-- How to NOT localize. This is just baaaaad!
 		local spellIDText = STAT_CATEGORY_SPELL .. " " .. ID
 		self:AddLine(spellIDText .. ": " .. data.spellId, colors.offwhite[1], colors.offwhite[2], colors.offwhite[3])
@@ -1707,6 +1765,34 @@ Tooltip.SetUnitDebuff = function(self, unit, debuffID, filter)
 	end 
 end
 
+Tooltip.SetTrackingSpell = function(self)
+	if (not self.owner) then
+		self:Hide()
+		return
+	end
+
+	local data = self:GetTooltipDataForTrackingSpell(self.data)
+	if (data and data.name) then 
+
+		-- Because a millionth of a second matters.
+		local colors = self.colors
+
+		-- Shouldn't be any bars here, but if for some reason 
+		-- the tooltip wasn't properly hidden before this, 
+		-- we make sure the bars are reset!
+		self:ClearStatusBars(true) -- suppress layout updates
+
+		if data.name then 
+			self:AddLine(data.name, colors.title[1], colors.title[2], colors.title[3], true)
+		end
+		if data.description then 
+			self:AddLine(data.description, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
+		end 
+
+		self:Show()
+	end
+end
+
 -- The same as the old Blizz call is doing. Bad. 
 Tooltip.GetUnit = function(self)
 	local unit = self.unit
@@ -1734,7 +1820,7 @@ Tooltip.IsUnit = function(self, unit)
 	local ourUnit = self:GetTooltipUnit()
 	return ourUnit and UnitExists(unit) and UnitIsUnit(unit, ourUnit) or false
 end
-	
+
 Tooltip.AddLine = function(self, msg, r, g, b, wrap)
 
 	-- Increment the line counter
@@ -1998,11 +2084,6 @@ Tooltip.OnShow = function(self)
 		GameTooltip:Hide()
 	end 
 
-	-- Is the battle pet tip forbidden too? Batter safe than sorry!
-	if BattlePetTooltip and ((not BattlePetTooltip:IsForbidden() and BattlePetTooltip:IsShown())) then 
-		BattlePetTooltip:Hide()
-	end 
-
 end 
 
 Tooltip.OnHide = function(self)
@@ -2058,7 +2139,7 @@ Tooltip.UpdateBarValues = function(self, unit, noUpdate)
 	local guid = UnitGUID(unit)
 	local disconnected = not UnitIsConnected(unit)
 	local dead = UnitIsDeadOrGhost(unit)
-	local needUpdate
+	local needUpdate, isRealValue
 
 	for i,bar in ipairs(self.bars) do
 		local isShown = bar:IsShown()
@@ -2069,7 +2150,8 @@ Tooltip.UpdateBarValues = function(self, unit, noUpdate)
 			else 
 				local min = UnitHealth(unit) or 0
 				local max = UnitHealthMax(unit) or 0
-
+				isRealValue = (max ~= 100)
+			
 				-- Only show units with health, hide the bar otherwise
 				if ((min > 0) and (max > 0)) then 
 					if (not isShown) then 
@@ -2112,7 +2194,8 @@ Tooltip.UpdateBarValues = function(self, unit, noUpdate)
 			end
 		end 
 		if (bar:IsShown() and self.PostUpdateStatusBar) then 
-			self:PostUpdateStatusBar(bar, bar:GetValue(), bar:GetMinMaxValues())
+			local min, max = bar:GetMinMaxValues()
+			self:PostUpdateStatusBar(bar, bar:GetValue(), min, max, isRealValue)
 		end 
 	end 
 
@@ -2343,7 +2426,7 @@ LibTooltip.CreateTooltip = function(self, name)
 	LibTooltip.numTooltips = LibTooltip.numTooltips + 1
 
 	-- Note that the global frame name is unrelated to the tooltip name requested by the modules.
-	local tooltipName = "CG_GameTooltip_"..LibTooltip.numTooltips
+	local tooltipName = "GP_GameTooltip_"..LibTooltip.numTooltips
 
 	local tooltip = setmetatable(LibTooltip:CreateFrame("Frame", tooltipName, "UICenter"), Tooltip_MT)
 	tooltip:Hide() -- keep it hidden while setting it up
@@ -2443,7 +2526,9 @@ LibTooltip.KillBlizzardTooltipBackdrop = function(self, tooltip)
 	if (Backdrops[tooltip]) then 
 		return 
 	end 
-	tooltip:SetBackdrop(nil) -- a reset is needed first, or we'll get weird bugs
+	if (tooltip.SetBackdrop) then
+		tooltip:SetBackdrop(nil) -- a reset is needed first, or we'll get weird bugs
+	end
 	tooltip.SetBackdrop = function() end -- kill off the original backdrop function
 	tooltip.GetBackdrop = function() return fakeBackdrop end
 	tooltip.GetBackdropColor = function() return unpack(fakeBackdropColor) end
@@ -2462,17 +2547,17 @@ LibTooltip.SetBlizzardTooltipBackdropOffsets = function(self, tooltip, left, rig
 end 
 
 LibTooltip.SetBlizzardTooltipBackdrop = function(self, tooltip, backdrop)
-	if (not Backdrops[tooltip]) then 
-		local backdrop = CreateFrame("Frame", nil, tooltip)
+	if (not Backdrops[tooltip]) then
+		local backdrop = CreateFrame("Frame", nil, tooltip, BackdropTemplateMixin and "BackdropTemplate")
 		backdrop:SetFrameStrata(tooltip:GetFrameStrata())
 		backdrop:SetFrameLevel(tooltip:GetFrameLevel())
 		backdrop:SetPoint("LEFT", 0, 0)
 		backdrop:SetPoint("RIGHT", 0, 0)
 		backdrop:SetPoint("TOP", 0, 0)
 		backdrop:SetPoint("BOTTOM", 0, 0)
-		hooksecurefunc(tooltip, "SetFrameStrata", function(self) backdrop:SetFrameLevel(self:GetFrameLevel()) end)
-		hooksecurefunc(tooltip, "SetFrameLevel", function(self) backdrop:SetFrameLevel(self:GetFrameLevel()) end)
-		hooksecurefunc(tooltip, "SetParent", function(self) backdrop:SetFrameLevel(self:GetFrameLevel()) end)
+		hooksecurefunc(tooltip, "SetFrameStrata", function() backdrop:SetFrameLevel(tooltip:GetFrameLevel()) end)
+		hooksecurefunc(tooltip, "SetFrameLevel", function() backdrop:SetFrameLevel(tooltip:GetFrameLevel()) end)
+		hooksecurefunc(tooltip, "SetParent", function() backdrop:SetFrameLevel(tooltip:GetFrameLevel()) end)
 		Backdrops[tooltip] = backdrop
 	end 
 	Backdrops[tooltip]:SetBackdrop(nil)

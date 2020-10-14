@@ -1,6 +1,6 @@
 local ADDON, Private = ...
-local L = CogWheel("LibLocale"):GetLocale(ADDON)
-local Module = CogWheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
+local L = Wheel("LibLocale"):GetLocale(ADDON)
+local Module = Wheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
 
 -- Tell the back-end what addon to look for before 
 -- initializing this module and all its submodules. 
@@ -153,7 +153,7 @@ local Style = function(self, unit, id, layout, ...)
 	for i = 1,6 do 
 		
 		-- Main point object
-		local point = classPower:CreateStatusBar() -- the widget require CogWheel statusbars
+		local point = classPower:CreateStatusBar() -- the widget require Wheel statusbars
 		point:SetSmoothingFrequency(.25) -- keep bar transitions fairly fast
 		point:SetMinMaxValues(0, 1)
 		point:SetValue(1)

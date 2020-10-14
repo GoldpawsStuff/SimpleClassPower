@@ -1,24 +1,24 @@
-local LibNamePlate = CogWheel:Set("LibNamePlate", 39)
+local LibNamePlate = Wheel:Set("LibNamePlate", 58)
 if (not LibNamePlate) then	
 	return
 end
 
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "LibNamePlate requires LibClientBuild to be loaded.")
-
-local LibMessage = CogWheel("LibMessage")
+local LibMessage = Wheel("LibMessage")
 assert(LibMessage, "LibNamePlate requires LibMessage to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibNamePlate requires LibEvent to be loaded.")
 
-local LibFrame = CogWheel("LibFrame")
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "LibCast requires LibClientBuild to be loaded.")
+
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "LibNamePlate requires LibFrame to be loaded.")
 
-local LibSecureHook = CogWheel("LibSecureHook")
+local LibSecureHook = Wheel("LibSecureHook")
 assert(LibSecureHook, "LibNamePlate requires LibSecureHook to be loaded.")
 
-local LibStatusBar = CogWheel("LibStatusBar")
+local LibStatusBar = Wheel("LibStatusBar")
 assert(LibStatusBar, "LibNamePlate requires LibStatusBar to be loaded.")
 
 -- Embed event functionality into this
@@ -27,10 +27,12 @@ LibEvent:Embed(LibNamePlate)
 LibFrame:Embed(LibNamePlate)
 LibSecureHook:Embed(LibNamePlate)
 LibStatusBar:Embed(LibNamePlate)
-LibClientBuild:Embed(LibNamePlate)
 
 -- Lua API
 local _G = _G
+local assert = assert
+local debugstack = debugstack
+local error = error
 local ipairs = ipairs
 local math_ceil = math.ceil
 local math_floor = math.floor
@@ -38,35 +40,47 @@ local pairs = pairs
 local select = select
 local setmetatable = setmetatable
 local string_find = string.find
+local string_format = string.format
+local string_join = string.join
+local string_match = string.match
 local table_insert = table.insert
 local table_remove = table.remove
 local table_sort = table.sort
 local table_wipe = table.wipe
 local tonumber = tonumber
 local tostring = tostring
+local type = type
 local unpack = unpack
 
 -- WoW API
-local GetNamePlateForUnit = _G.C_NamePlate.GetNamePlateForUnit
-local CreateFrame = _G.CreateFrame
-local InCombatLockdown = _G.InCombatLockdown
-local IsLoggedIn = _G.IsLoggedIn
-local UnitClass = _G.UnitClass
-local UnitClassification = _G.UnitClassification
-local UnitExists = _G.UnitExists
-local UnitHealth = _G.UnitHealth
-local UnitHealthMax = _G.UnitHealthMax
-local UnitIsFriend = _G.UnitIsFriend
-local UnitIsPlayer = _G.UnitIsPlayer
-local UnitIsTapDenied = _G.UnitIsTapDenied
-local UnitIsTrivial = _G.UnitIsTrivial
-local UnitIsUnit = _G.UnitIsUnit
-local UnitLevel = _G.UnitLevel
-local UnitName = _G.UnitName
-local UnitReaction = _G.UnitReaction
+local GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
+local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
+local IsAddOnLoaded = IsAddOnLoaded
+local IsLoggedIn = IsLoggedIn
+local SetCVar = SetCVar
+local UnitCanAttack = UnitCanAttack
+local UnitClass = UnitClass
+local UnitClassification = UnitClassification
+local UnitExists = UnitExists
+local UnitHealth = UnitHealth
+local UnitHealthMax = UnitHealthMax
+local UnitIsFriend = UnitIsFriend
+local UnitIsPlayer = UnitIsPlayer
+local UnitIsTapDenied = UnitIsTapDenied
+local UnitIsTrivial = UnitIsTrivial
+local UnitIsUnit = UnitIsUnit
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitReaction = UnitReaction
 
 -- WoW Frames & Objects
-local WorldFrame = _G.WorldFrame
+local WorldFrame = WorldFrame
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
+local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Plate Registries
 LibNamePlate.allPlates = LibNamePlate.allPlates or {}
@@ -156,27 +170,18 @@ local FADE_DOWN = .25 -- time in seconds to fade down, but not out
 
 -- Opacity Settings
 -- *From library build 25 we're keeping these local
+local ALPHA_FULL_INDEX = 1
+local ALPHA_HIGH_INDEX = 2
+local ALPHA_MEDIUM_INDEX = 3
+local ALPHA_LOW_INDEX = 4
+local ALPHA_NONE_INDEX = 5
+
 local ALPHA = {
-	-- Opacity while engaged in combat
-	InCombat = {
-		[0] = 0, 	-- Not visible.  
-		[1] = 1, 	-- For the current target, if any
-		[2] = .85, 	-- For players when not having a target, also for World Bosses when not targeted
-		[3] = .7, 	-- For non-targeted players when having a target
-		[4] = .35, 	-- For non-targeted trivial mobs
-		[5] = .25, 	-- For non-targeted friendly NPCs 
-		[6] = .1
-	},
-	-- Opacity while not in combat
-	NoCombat = {
-		[0] = 0, 	-- Not visible.
-		[1] = 1, 	-- For the current target, if any
-		[2] = .7, 	-- For players when not having a target, also for World Bosses when not targeted
-		[3] = .35, 	-- For non-targeted players when having a target
-		[4] = .25, 	-- For non-targeted trivial mobs
-		[5] = .15, 	-- For non-targeted friendly NPCs 
-		[6] = .1
-	}
+	[ALPHA_FULL_INDEX] = 1,
+	[ALPHA_HIGH_INDEX] = .85,
+	[ALPHA_MEDIUM_INDEX] = .75,
+	[ALPHA_LOW_INDEX] = .25,
+	[ALPHA_NONE_INDEX] = 0
 }
 
 -- New from build 29
@@ -185,7 +190,7 @@ local ENFORCED_CVARS = {
 	nameplateMinAlpha = .4, -- .6
 	nameplateOccludedAlphaMult = .15, -- .4
 	nameplateSelectedAlpha = 1, -- 1
-	nameplateMaxAlphaDistance = 30, -- 40
+	nameplateMaxAlphaDistance = IsClassic and 20 or IsRetail and 30, -- 40
 	nameplateMinAlphaDistance = 10 -- 10
 }
 
@@ -226,20 +231,19 @@ local Colors = {
 	tapped = prepare(161/255, 141/255, 120/255),
 
 	class = {
-		DEATHKNIGHT 	= prepare( 176/255,  31/255,  79/255 ), -- slightly more blue, less red, to stand out from angry mobs better
-		DEMONHUNTER 	= prepare( 163/255,  48/255, 201/255 ),
-		DRUID 			= prepare( 255/255, 125/255,  10/255 ),
-		HUNTER 			= prepare( 191/255, 232/255, 115/255 ), -- slightly more green and yellow, to stand more out from friendly players/npcs
-		MAGE 			= prepare( 105/255, 204/255, 240/255 ),
-		MONK 			= prepare(   0/255, 255/255, 150/255 ),
-		PALADIN 		= prepare( 255/255, 130/255, 226/255 ), -- less pink, more purple
-		--PALADIN 		= prepare( 245/255, 140/255, 186/255 ), -- original 
-		PRIEST 			= prepare( 220/255, 235/255, 250/255 ), -- tilted slightly towards blue, and somewhat toned down. chilly.
-		ROGUE 			= prepare( 255/255, 225/255,  95/255 ), -- slightly more orange than Blizz, to avoid the green effect when shaded with black
-		SHAMAN 			= prepare(  32/255, 122/255, 222/255 ), -- brighter, to move it a bit away from the mana color
-		WARLOCK 		= prepare( 148/255, 130/255, 201/255 ),
-		WARRIOR 		= prepare( 199/255, 156/255, 110/255 ),
-		UNKNOWN 		= prepare( 195/255, 202/255, 217/255 )
+		DEATHKNIGHT 		= prepare( 176/255,  31/255,  79/255 ),
+		DEMONHUNTER 		= prepare( 163/255,  48/255, 201/255 ),
+		DRUID 				= prepare( 255/255, 125/255,  10/255 ),
+		HUNTER 				= prepare( 191/255, 232/255, 115/255 ), 
+		MAGE 				= prepare( 105/255, 204/255, 240/255 ),
+		MONK 				= prepare(   0/255, 255/255, 150/255 ),
+		PALADIN 			= prepare( 225/255, 160/255, 226/255 ),
+		PRIEST 				= prepare( 176/255, 200/255, 225/255 ),
+		ROGUE 				= prepare( 255/255, 225/255,  95/255 ), 
+		SHAMAN 				= prepare(  32/255, 122/255, 222/255 ), 
+		WARLOCK 			= prepare( 148/255, 130/255, 201/255 ), 
+		WARRIOR 			= prepare( 229/255, 156/255, 110/255 ), 
+		UNKNOWN 			= prepare( 195/255, 202/255, 217/255 ),
 	},
 	debuff = {
 		none 			= prepare( 204/255,   0/255,   0/255 ),
@@ -266,12 +270,6 @@ local Colors = {
 		[7] 			= prepare(  64/255, 131/255, 104/255 ), -- revered
 		[8] 			= prepare(  64/255, 131/255, 131/255 ), -- exalted
 		civilian 		= prepare(  64/255, 131/255,  38/255 )  -- used for friendly player nameplates
-	},
-	threat = {
-		[0] 			= prepare( 175/255, 165/255, 155/255 ), -- gray, low on threat
-		[1] 			= prepare( 255/255, 128/255,  64/255 ), -- light yellow, you are overnuking 
-		[2] 			= prepare( 255/255,  64/255,  12/255 ), -- orange, tanks that are losing threat
-		[3] 			= prepare( 255/255,   0/255,   0/255 )  -- red, you're securely tanking, or totally fucked :) 
 	}
 }
 
@@ -287,7 +285,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 --Return rounded number
@@ -325,46 +323,112 @@ NamePlate.UpdateAlpha = function(self)
 	if (not UnitExists(unit)) then
 		return 
 	end
-	local alphaLevel = 0
+	local alphaLevel = ALPHA_NONE_INDEX
 	if visiblePlates[self] then
 		if (self.OverrideAlpha) then 
 			return self:OverrideAlpha(unit)
 		end 
-		if self.isTarget or self.isYou then
-			alphaLevel = 1
+		
+		local alphaReduction
+
+		if (self.isTarget or self.isYou) then
+			alphaLevel = ALPHA_FULL_INDEX
 		else
+			-- When you have a target, all else will be lowered by blizzard.
 			if HAS_TARGET then
-				if self.isTrivial then 
-					alphaLevel = 5
-				elseif self.isPlayer then
-					alphaLevel = 3
-				elseif self.isFriend then
-					alphaLevel = 5
+
+				-- Players
+				if (self.isPlayer) then
+
+					-- Enemy Players
+					if (self.isEnemy) then
+						alphaLevel = ALPHA_HIGH_INDEX
+
+					-- Friendly Players
+				elseif (self.isFriend) then
+						alphaLevel = ALPHA_HIGH_INDEX
+						alphaReduction = true
+					end
 				else
-					if self.isElite or self.isRare or self.isBoss then
-						alphaLevel = 2
+
+					-- Important NPCs
+					if (self.isElite or self.isRare or self.isBoss) then
+						if (self.isFriend) then 
+							alphaLevel = ALPHA_FULL_INDEX
+							alphaReduction = true
+						else
+							alphaLevel = ALPHA_FULL_INDEX
+						end
+
+					-- Enemy NPCs
+					elseif (self.isEnemy) then
+						alphaLevel = ALPHA_HIGH_INDEX
+
+					-- Friendly NPCs
+					elseif (self.isFriend) then
+						alphaLevel = ALPHA_LOW_INDEX
+
+					-- Trivial NPCs (do the even exist in Classic?)
+					elseif (self.isTrivial) then 
+						alphaLevel = ALPHA_LOW_INDEX
 					else
-						alphaLevel = 3
-					end	
+						-- Those that fall inbetween. Neutral NPCs?
+						alphaLevel = ALPHA_MEDIUM_INDEX
+					end
 				end
-			elseif self.isTrivial then 
-				alphaLevel = 4
-			elseif self.isPlayer then
-				alphaLevel = 2
-			elseif self.isFriend then
-				alphaLevel = 5
+
 			else
-				if self.isElite or self.isRare or self.isBoss then
-					alphaLevel = 1
+
+				-- Players
+				if (self.isPlayer) then
+
+					-- Enemy Players
+					if (self.isEnemy) then
+						alphaLevel = ALPHA_MEDIUM_INDEX
+
+					-- Friendly Players
+					elseif (self.isFriend) then
+						alphaLevel = ALPHA_MEDIUM_INDEX
+						alphaReduction = true
+					end
 				else
-					alphaLevel = 3
-				end	
+
+					-- Important NPCs
+					if (self.isElite or self.isRare or self.isBoss) then
+						if (self.isFriend) then 
+							alphaLevel = ALPHA_HIGH_INDEX
+							alphaReduction = true
+						else
+							alphaLevel = ALPHA_HIGH_INDEX
+						end
+
+					-- Enemy NPCs
+					elseif (self.isEnemy) then
+						alphaLevel = ALPHA_MEDIUM_INDEX
+
+					-- Friendly NPCs
+					elseif (self.isFriend) then
+						alphaLevel = ALPHA_LOW_INDEX
+
+					-- Trivial NPCs (do the even exist in Classic?)
+					elseif (self.isTrivial) then 
+						alphaLevel = ALPHA_LOW_INDEX
+					else
+						-- Those that fall inbetween. Neutral NPCs?
+						alphaLevel = ALPHA_MEDIUM_INDEX
+					end
+				end
 			end
 		end
 	end
 
 	-- Multiply with the blizzard alpha, to piggyback on their line of sight occluded alpha
-	self.targetAlpha = self.baseFrame:GetAlpha() * ALPHA[IN_COMBAT and "InCombat" or "NoCombat"][alphaLevel]
+	--self.targetAlpha = self.baseFrame:GetAlpha() * ALPHA.NoCombat[alphaLevel]
+	self.targetAlpha = self.baseFrame:GetAlpha() * ALPHA[alphaLevel]
+
+	if (alphaReduction) then
+		self.targetAlpha = self.targetAlpha * (not IN_COMBAT) and .5 or 1
+	end
 
 	if (self.PostUpdateAlpha) then 
 		self:PostUpdateAlpha(unit, self.targetAlpha, alphaLevel)
@@ -407,11 +471,18 @@ NamePlate.UpdateFrameLevel = function(self)
 	end
 end
 
+-- Doesn't appear to be called anymore?
 NamePlate.UpdateScale = function(self)
-	self:SetScale(LibNamePlate.SCALE * self.baseFrame:GetScale())
+	local scale = LibNamePlate.SCALE * self.baseFrame:GetScale()
+	--print("Setting scale of "..self:GetName().." to ".. scale)
+	self:SetScale(scale)
 end
 
-NamePlate.OnShow = function(self)
+NamePlate.GetBaseFrame = function(self)
+	return self.baseFrame
+end
+
+NamePlate.OnShow = function(self, event, unit)
 	local unit = self.unit
 	if not UnitExists(unit) then
 		return
@@ -421,9 +492,12 @@ NamePlate.OnShow = function(self)
 	self.currentAlpha = 0 -- update stored alpha value
 	self.achievedAlpha = 0 -- set this as the achieved alpha
 
+	self.isVisible = true
+	self.inCombat = IN_COMBAT
 	self.isYou = UnitIsUnit(unit, "player")
 	self.isTarget = UnitIsUnit(unit, "target") -- gotta update this on target changes... 
 	self.isPlayer = UnitIsPlayer(unit)
+	self.isEnemy = UnitIsEnemy(unit, "player")
 	self.isFriend = UnitIsFriend("player", unit)
 	self.isTrivial = UnitIsTrivial(unit)
 	self.isBoss = (self.unitClassificiation == "worldboss") or (self.unitLevel and self.unitLevel < 1)
@@ -431,7 +505,14 @@ NamePlate.OnShow = function(self)
 	self.isElite = (self.unitClassificiation == "elite") or (self.unitClassificiation == "rareelite")
 	self.unitLevel = UnitLevel(unit)
 	self.unitClassificiation = UnitClassification(unit)
+	self.unitCanAttack = UnitCanAttack("player", unit)
 
+	-- Enabling of situational elements should be done here.
+	-- Flags are available to the front-end at this point.
+	if (self.PreUpdate) then 
+		self:PreUpdate("OnShow", unit)
+	end 
+	self:KillBlizzard()
 	self:Show() -- make the fully transparent frame visible
 
 	-- this will trigger the fadein 
@@ -448,27 +529,44 @@ NamePlate.OnShow = function(self)
 	self:UpdateAllElements()
 
 	if (self.PostUpdate) then 
-		self:PostUpdate()
+		self:PostUpdate("OnShow", unit)
 	end 
 end
 
-NamePlate.OnHide = function(self)
+NamePlate.OnHide = function(self, event, unit)
 	visiblePlates[self] = false -- this will trigger the fadeout and hiding
 
+	self.isVisible = nil
 	self.isYou = nil
 	self.isTarget = nil
 	self.isPlayer = nil
 	self.isFriend = nil
+	self.isEnemy = nil
 	self.isTrivial = nil
 	self.isBoss = nil
 	self.isRare = nil
 	self.isElite = nil
+	self.inCombat = nil
 	self.unitLevel = nil
 	self.unitClassificiation = nil
 
 	for element in pairs(elements) do
 		self:DisableElement(element, true)
 	end
+end
+
+NamePlate.OnEnter = function(self)
+	self.isMouseOver = true
+	if (self.PostUpdate) then 
+		self:PostUpdate("OnEnter", self.unit)
+	end 
+end
+
+NamePlate.OnLeave = function(self)
+	self.isMouseOver = false
+	if (self.PostUpdate) then 
+		self:PostUpdate("OnLeave", self.unit)
+	end 
 end
 
 NamePlate.OnEvent = function(frame, event, ...)
@@ -752,7 +850,8 @@ end
 -- This is where a name plate is first created, 
 -- but it hasn't been assigned a unit (Legion) or shown yet.
 LibNamePlate.CreateNamePlate = function(self, baseFrame, name)
-	local plate = setmetatable(self:CreateFrame("Frame", "CG_" .. (name or baseFrame:GetName()), WorldFrame), NamePlate_MT)
+	-- Parent them to the baseFrame, or scaling simply won't work anymore
+	local plate = setmetatable(self:CreateFrame("Frame", "GP_" .. (name or baseFrame:GetName()), baseFrame), NamePlate_MT)
 	plate.frameLevel = FRAMELEVEL_CURRENT -- storing the framelevel
 	plate.targetAlpha = 0
 	plate.currentAlpha = 0
@@ -764,20 +863,30 @@ LibNamePlate.CreateNamePlate = function(self, baseFrame, name)
 	plate:SetFrameStrata("BACKGROUND")
 	plate:SetFrameLevel(plate.frameLevel)
 	plate:SetAlpha(plate.currentAlpha)
+	plate:SetIgnoreParentAlpha(true)
 	plate:UpdateScale()
 
 	-- Make sure the visible part of the Blizzard frame remains hidden
-	local unitframe = baseFrame.UnitFrame
-	if unitframe then
-		unitframe:Hide()
-		unitframe:HookScript("OnShow", function(unitframe) unitframe:Hide() end) 
+	-- *Note: Do not EVER put a script on any of these with SetScript, 
+	--  as it will break important secure functionality of the frame, like clicks!
+	-- *Note2: Don't hook OnEnter/OnLeave on the baseFrame either, same reason as above.
+	plate.KillBlizzard = function(self)
+		local unitFrame = self.baseFrame.UnitFrame
+		if (unitFrame) then
+			unitFrame:Hide()
+			if (not self.hasHideScripts) then
+				unitFrame:HookScript("OnShow", function() unitFrame:Hide() end) 
+				self.hasHideScripts = true
+			end
+		end
 	end
 
 	-- Make sure our nameplate fades out when the blizzard one is hidden.
-	baseFrame:HookScript("OnHide", function() plate:OnHide() end)
+	baseFrame:HookScript("OnHide", function(baseFrame) plate:OnHide() end)
 
 	-- Follow the blizzard scale changes.
-	baseFrame:HookScript("OnSizeChanged", function() plate:UpdateScale() end)
+	-- Does not appear to follow scale changes in 9.0.1.
+	--baseFrame:HookScript("OnSizeChanged", function() plate:UpdateScale() end)
 
 	-- Since constantly updating frame levels can cause quite the performance drop, 
 	-- we're just giving each frame a set frame level when they spawn. 
@@ -879,10 +988,10 @@ LibNamePlate.UpdateNamePlateOptions = function(self)
 		return 
 	end 
 	hasQueuedSettingsUpdate = nil
+	hasSetBlizzardSettings = true
 	self:ForAllEmbeds("PostUpdateNamePlateOptions")
 end
 
--- TODO: Make this useful. 
 LibNamePlate.UpdateAllScales = function(self)
 	if (oldScale ~= LibNamePlate.SCALE) then
 		for baseFrame, plate in pairs(allPlates) do
@@ -905,8 +1014,7 @@ LibNamePlate.OnEvent = function(self, event, ...)
 		local plate = baseFrame and allPlates[baseFrame] 
 		if plate then
 			plate.unit = unit
-			plate:OnShow(unit)
-
+			plate:OnShow(event, unit)
 		end
 
 	elseif (event == "NAME_PLATE_UNIT_REMOVED") then
@@ -915,34 +1023,30 @@ LibNamePlate.OnEvent = function(self, event, ...)
 		local plate = baseFrame and allPlates[baseFrame] 
 		if plate then
 			plate.unit = nil
-			plate:OnHide()
+			plate:OnHide(event, unit)
 		end
 
 	elseif (event == "PLAYER_TARGET_CHANGED") then
 		HAS_TARGET = UnitExists("target")
-		for baseFrame, plate in pairs(allPlates) do
-			if plate:IsShown() then
+		for plate, baseFrame in pairs(visiblePlates) do
+			-- Will be 'false' when fading out, 'nil' when hidden.
+			-- Either way, this only applies to visible, active plates. 
+			if (baseFrame) then
 				plate.isTarget = HAS_TARGET and plate.unit and UnitIsUnit(plate.unit, "target") 
 				plate:UpdateAlpha()
 				plate:UpdateFrameLevel()
+				if (plate.PostUpdate) then
+					plate:PostUpdate(event, plate.unit)
+				end
 			end
 		end	
 		
-	--elseif (event == "VARIABLES_LOADED") then
-		--self:UpdateNamePlateOptions()
+	elseif (event == "VARIABLES_LOADED") then
+		self:UpdateNamePlateOptions()
 	
 	elseif (event == "PLAYER_ENTERING_WORLD") then
 		IN_COMBAT = InCombatLockdown() and true or false
 		self:ForAllEmbeds("PreUpdateNamePlateOptions")
-
-		if (not hasSetBlizzardSettings) then
-			if _G.C_NamePlate then
-				self:UpdateNamePlateOptions()
-			else
-				self:RegisterEvent("ADDON_LOADED", "OnEvent")
-			end
-			hasSetBlizzardSettings = true
-		end
 		self:UpdateAllScales()
 		self.frame.elapsed = 0
 		self.frame.throttle = THROTTLE
@@ -954,17 +1058,29 @@ LibNamePlate.OnEvent = function(self, event, ...)
 
 	elseif (event == "PLAYER_REGEN_DISABLED") then 
 		IN_COMBAT = true
-		for baseFrame, plate in pairs(allPlates) do
-			if plate and plate:IsShown() then
+		for plate, baseFrame in pairs(visiblePlates) do
+			-- Will be 'false' when fading out, 'nil' when hidden.
+			-- Either way, this only applies to visible, active plates. 
+			if (baseFrame) then
+				plate.inCombat = IN_COMBAT
 				plate:UpdateAlpha()
+				if (plate.PostUpdate) then
+					plate:PostUpdate(event, plate.unit)
+				end
 			end
 		end
 
 	elseif (event == "PLAYER_REGEN_ENABLED") then 
 		IN_COMBAT = false 
-		for baseFrame, plate in pairs(allPlates) do
-			if plate and plate:IsShown() then
+		for plate, baseFrame in pairs(visiblePlates) do
+			-- Will be 'false' when fading out, 'nil' when hidden.
+			-- Either way, this only applies to visible, active plates. 
+			if (baseFrame) then
+				plate.inCombat = IN_COMBAT
 				plate:UpdateAlpha()
+				if (plate.PostUpdate) then
+					plate:PostUpdate(event, plate.unit)
+				end
 			end
 		end
 		if hasQueuedSettingsUpdate then 
@@ -978,18 +1094,6 @@ LibNamePlate.OnEvent = function(self, event, ...)
 	elseif (event == "UI_SCALE_CHANGED") then
 		self:UpdateAllScales()
 
-	elseif (event == "CG_CVAR_UPDATED") then 
-		if (name and ENFORCED_CVARS[name]) then 
-			self:EnforceConsoleVars()
-		end 
-
-	elseif (event == "ADDON_LOADED") then
-		local addon = ...
-		if (addon == "Blizzard_NamePlates") then
-			hasSetBlizzardSettings = true
-			self:UpdateNamePlateOptions()
-			self:UnregisterEvent("ADDON_LOADED")
-		end
 	end
 end
 
@@ -1026,22 +1130,51 @@ LibNamePlate.OnUpdate = function(self, elapsed)
 	-- We need the full value since the last set of updates
 	local elapsed = self.elapsed
 
-	for frame, frequentElements in pairs(frequentUpdates) do
-		for element, frequency in pairs(frequentElements) do
-			if frequency.hz then
-				frequency.elapsed = frequency.elapsed + elapsed
-				if (frequency.elapsed >= frequency.hz) then
-					elements[element].Update(frame, "FrequentUpdate", frame.unit, elapsed) 
-					frequency.elapsed = 0
+	for plate, frequentElements in pairs(frequentUpdates) do
+		if (visiblePlates[plate]) then
+			for element, frequency in pairs(frequentElements) do
+				if (frequency.hz) then
+					frequency.elapsed = frequency.elapsed + elapsed
+					if (frequency.elapsed >= frequency.hz) then
+						elements[element].Update(plate, "FrequentUpdate", plate.unit, elapsed) 
+						frequency.elapsed = 0
+					end
+				else
+					elements[element].Update(plate, "FrequentUpdate", plate.unit)
 				end
-			else
-				elements[element].Update(frame, "FrequentUpdate", frame.unit)
 			end
 		end
 	end
 
+	-- Does a mouseover unit exist?
+	local hasMouseOver = UnitExists("mouseover")
+
+	-- Is a frame currently highlighted?
+	local previousHighlight = self.currentHighlight
+	
+	-- Flag to track discovery in the current iteration
+	local currentHighlight
+
+	-- Iterate!
 	for plate, baseFrame in pairs(visiblePlates) do
-		if baseFrame and baseFrame:IsShown() then
+
+		if (plate.unit) then
+			if (previousHighlight) then
+				if (previousHighlight == plate) and ((not hasMouseOver) or (not UnitIsUnit("mouseover", plate.unit))) then
+					plate:OnLeave()
+					previousHighlight = nil
+				end
+			end
+			if (not currentHighlight) then
+				if (hasMouseOver) and (previousHighlight ~= plate) and (UnitIsUnit("mouseover", plate.unit)) then
+					self.currentHighlight = plate
+					plate:OnEnter()
+					currentHighlight = plate
+				end
+			end
+		end
+
+		if (baseFrame and baseFrame:IsShown()) then
 			plate:UpdateAlpha()
 		else
 			plate.targetAlpha = 0
@@ -1095,28 +1228,20 @@ LibNamePlate.OnUpdate = function(self, elapsed)
 	self.elapsed = 0
 end 
 
-do 
-	local enforcing 
-	LibNamePlate.EnforceConsoleVars = function(self, event, ...)
-		if enforcing then 
-			return 
-		end 
-		if InCombatLockdown() then 
-			return self:RegisterEvent("PLAYER_REGEN_ENABLED", "EnforceConsoleVars")
-		end 
-		if (event == "PLAYER_REGEN_ENABLED") then 
-			self:UnregisterEvent("PLAYER_REGEN_ENABLED", "EnforceConsoleVars")
-		end
-		enforcing = true 
-		for name,value in pairs(ENFORCED_CVARS) do 
-			SetCVar(name,value)
-		end 
-		enforcing = nil 
+LibNamePlate.SetConsoleVars = function(self, event, ...)
+	if (InCombatLockdown()) then 
+		return self:RegisterEvent("PLAYER_REGEN_ENABLED", "SetConsoleVars")
+	end 
+	if (event == "PLAYER_REGEN_ENABLED") then 
+		self:UnregisterEvent("PLAYER_REGEN_ENABLED", "SetConsoleVars")
 	end
-end 
+	for name,value in pairs(ENFORCED_CVARS) do 
+		SetCVar(name,value)
+	end
+end
 
 LibNamePlate.Enable = function(self)
-	if self.enabled then 
+	if (self.enabled) then 
 		return
 	end 
 
@@ -1141,28 +1266,37 @@ LibNamePlate.Enable = function(self)
 
 	-- Remove Personal Resource Display clutter
 	self:KillClassClutter()
+	self:UpdateNamePlateOptions()
 
-	-- These we will enforce 
-	self:EnforceConsoleVars()
-	self:SetSecureHook("SetCVar", "OnEvent", "CG_CVAR_UPDATED")
+	-- These we will enforce
+	self:SetConsoleVars()
 
 	self.enabled = true
 end 
 
 LibNamePlate.KillClassClutter = function(self)
-	if NamePlateDriverFrame then
-		DeathKnightResourceOverlayFrame:UnregisterAllEvents()
-		ClassNameplateBarMageFrame:UnregisterAllEvents()
-		ClassNameplateBarWindwalkerMonkFrame:UnregisterAllEvents()
-		ClassNameplateBarPaladinFrame:UnregisterAllEvents()
-		ClassNameplateBarRogueDruidFrame:UnregisterAllEvents()
-		ClassNameplateBarWarlockFrame:UnregisterAllEvents()
-		ClassNameplateManaBarFrame:UnregisterAllEvents()
-		ClassNameplateBrewmasterBarFrame:UnregisterAllEvents()
-		NamePlateDriverFrame:SetClassNameplateManaBar(nil)
-		NamePlateDriverFrame:SetClassNameplateBar(nil)
+
+	local BlizzPlateManaBar = NamePlateDriverFrame.classNamePlatePowerBar
+	if (BlizzPlateManaBar) then
+		BlizzPlateManaBar:Hide()
+		BlizzPlateManaBar:UnregisterAllEvents()
 	end
-end 
+
+	if (NamePlateDriverFrame.SetupClassNameplateBars) then
+		hooksecurefunc(NamePlateDriverFrame, "SetupClassNameplateBars", function(frame)
+			if (not frame) or (frame:IsForbidden()) then
+				return
+			end
+			if (frame.classNamePlateMechanicFrame) then
+				frame.classNamePlateMechanicFrame:Hide()
+			end
+			if (frame.classNamePlatePowerBar) then
+				frame.classNamePlatePowerBar:Hide()
+				frame.classNamePlatePowerBar:UnregisterAllEvents()
+			end
+		end)
+	end
+end
 
 LibNamePlate.StartNamePlateEngine = function(self)
 	if LibNamePlate.enabled then 

@@ -1,3 +1,3 @@
 local ADDON = ...
-local L = CogWheel("LibLocale"):NewLocale(ADDON, "esES")
+local L = Wheel("LibLocale"):NewLocale(ADDON, "esES")
 

@@ -1,32 +1,49 @@
--- Lua API
-local _G = _G
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "UnitThreat requires LibClientBuild to be loaded.")
 
 -- WoW API
-local IsInGroup = _G.IsInGroup
-local IsInInstance = _G.IsInInstance
-local UnitExists = _G.UnitExists
-local UnitThreatSituation = _G.UnitThreatSituation
+local CreateFrame = CreateFrame
+local IsInGroup = IsInGroup
+local IsInInstance = IsInInstance
+local UnitDetailedThreatSituation = UnitDetailedThreatSituation
+local UnitExists = UnitExists
+local UnitThreatSituation = UnitThreatSituation
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 local UpdateColor = function(element, unit, status, r, g, b)
-	if element.OverrideColor then
+	if (element.OverrideColor) then
 		return element:OverrideColor(unit, status, r, g, b)
 	end
-
 	-- Just some little trickery to easily support both textures and frames
-	element[element.SetVertexColor and "SetVertexColor" or "SetBackdropBorderColor"](element, r, g, b)
-
-	if element.PostUpdateColor then 
+	local colorFunc = element.SetVertexColor or element.SetBackdropBorderColor
+	if (colorFunc) then
+		colorFunc(element, r, g, b)
+	end
+	if (element.PostUpdateColor) then
 		element:PostUpdateColor(unit, status, r, g, b)
 	end 
 end
 
-local Update = function(self, event, unit)
-	if (not unit) or (unit ~= self.unit) then 
+local Update = function(self, event, unit, ...)
+	if (not unit) or (unit ~= self.unit) then
 		return 
-	end 
-
+	end
 	local element = self.Threat
-	if element.PreUpdate then
+
+	-- Just do a fast kill on combat end.
+	if (event == "PLAYER_REGEN_DISABLED") then
+		element:Hide()
+		element.status = nil
+		if (element.PostUpdate) then
+			return element:PostUpdate(unit, status, r, g, b)
+		end
+		return
+	end
+
+	if (element.PreUpdate) then
 		element:PreUpdate(unit)
 	end
 
@@ -40,7 +57,9 @@ local Update = function(self, event, unit)
 		else
 			status = UnitThreatSituation(unit)
 		end
-	end
+	end 
+
+	element.status = status
 
 	local r, g, b
 	if (status and (status > 0)) then
@@ -51,14 +70,14 @@ local Update = function(self, event, unit)
 		element:Hide()
 	end
 	
-	if element.PostUpdate then
+	if (element.PostUpdate) then
 		return element:PostUpdate(unit, status, r, g, b)
-	end	
-end 
+	end
+end
 
 local Proxy = function(self, ...)
 	return (self.Threat.Override or Update)(self, ...)
-end 
+end
 
 local ForceUpdate = function(element)
 	return Proxy(element._owner, "Forced", element._owner.unit)
@@ -66,26 +85,30 @@ end
 
 local Enable = function(self)
 	local element = self.Threat
-	if element then
+	if (element) then
 		element._owner = self
 		element.ForceUpdate = ForceUpdate
 		element.UpdateColor = UpdateColor
+
 		self:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE", Proxy)
 		self:RegisterEvent("UNIT_THREAT_LIST_UPDATE", Proxy)
+
 		return true
 	end
 end 
 
 local Disable = function(self)
 	local element = self.Threat
-	if element then
+	if (element) then
+
 		self:UnregisterEvent("UNIT_THREAT_SITUATION_UPDATE", Proxy)
 		self:UnregisterEvent("UNIT_THREAT_LIST_UPDATE", Proxy)
+
 		element:Hide()
 	end
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Threat", Enable, Disable, Proxy, 10)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("Threat", Enable, Disable, Proxy, 18)
 end 

@@ -1,8 +1,7 @@
 local ADDON, Private = ...
-local LibDB = CogWheel("LibDB")
+local LibDB = Wheel("LibDB")
 
 -- Private Addon API
-local GetFont = Private.GetFont
 local GetMedia = Private.GetMedia
 local Colors = Private.Colors
 

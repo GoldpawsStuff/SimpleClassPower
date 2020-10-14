@@ -14,18 +14,17 @@ local Update = function(self, event, unit)
 		element:PreUpdate(unit)
 	end
 
-	local inCombat = UnitAffectingCombat("player")
-	if (inCombat) then
+	if (UnitAffectingCombat("player")) then 
 		element:Show()
 		if element.Glow then 
 			element.Glow:Show()
 		end
-	else
+	else 
 		element:Hide()
 		if element.Glow then 
 			element.Glow:Hide()
 		end
-	end
+	end 
 
 	if element.PostUpdate then 
 		return element:PostUpdate(unit)
@@ -46,8 +45,7 @@ local Enable = function(self)
 		element._owner = self
 		element.ForceUpdate = ForceUpdate
 
-		local inCombat = UnitAffectingCombat("player")
-		if (inCombat) then
+		if (InCombatLockdown()) then
 			element:Show()
 			if element.Glow then 
 				element.Glow:Show()
@@ -81,6 +79,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Combat", Enable, Disable, Proxy, 3)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("Combat", Enable, Disable, Proxy, 4)
 end 

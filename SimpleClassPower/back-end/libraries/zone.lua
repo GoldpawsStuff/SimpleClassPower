@@ -1,5 +1,5 @@
-local LibZone = CogWheel:Set("LibZone", 1)
-if (not LibZone) then	
+local LibZone = Wheel:Set("LibZone", 3)
+if (not LibZone) then
 	return
 end
 
@@ -18,9 +18,9 @@ local tonumber = tonumber
 local type = type
 
 -- WoW API
-local GetBestMapForUnit = _G.C_Map.GetBestMapForUnit
-local GetMapInfo = _G.C_Map.GetMapInfo
-local UnitFactionGroup = _G.UnitFactionGroup
+local GetBestMapForUnit = C_Map.GetBestMapForUnit
+local GetMapInfo = C_Map.GetMapInfo
+local UnitFactionGroup = UnitFactionGroup
 
 -- Library registries
 LibZone.embeds = LibZone.embeds or {}
@@ -36,7 +36,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 local MapFactions
@@ -139,6 +139,7 @@ for target in pairs(LibZone.embeds) do
 end
 
 -- PvP Zone info for Battle for Azeroth (post Cataclysm)
+-- Must be updated!!
 -- https://wow.gamepedia.com/UiMapID
 MapFactions = {
 	[ 468] = "Alliance", 	-- Ammen Vale

@@ -1,3 +1,3 @@
 local ADDON = ...
-local L = CogWheel("LibLocale"):NewLocale(ADDON, "ptBR")
+local L = Wheel("LibLocale"):NewLocale(ADDON, "ptBR")
 

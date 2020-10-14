@@ -1,3 +1,6 @@
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "GenericReputation requires LibClientBuild to be loaded.")
+
 -- Lua API
 local _G = _G
 local math_floor = math.floor
@@ -6,12 +9,16 @@ local tonumber = tonumber
 local tostring = tostring
 
 -- WoW API
-local GetFactionInfo = _G.GetFactionInfo
-local GetFactionParagonInfo = _G.C_Reputation.GetFactionParagonInfo
-local GetFriendshipReputation = _G.GetFriendshipReputation
-local GetNumFactions = _G.GetNumFactions
-local GetWatchedFactionInfo = _G.GetWatchedFactionInfo
-local IsFactionParagon = _G.C_Reputation.IsFactionParagon
+local GetFactionInfo = GetFactionInfo
+local GetFactionParagonInfo = C_Reputation and C_Reputation.GetFactionParagonInfo
+local GetFriendshipReputation = GetFriendshipReputation
+local GetNumFactions = GetNumFactions
+local GetWatchedFactionInfo = GetWatchedFactionInfo
+local IsFactionParagon = C_Reputation and C_Reputation.IsFactionParagon
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 -- Number abbreviations
 local short = function(value)
@@ -89,7 +96,7 @@ end
 
 local Update = function(self, event, unit)
 	local element = self.Reputation
-	if element.PreUpdate then
+	if (element.PreUpdate) then
 		element:PreUpdate(unit)
 	end
 
@@ -98,13 +105,15 @@ local Update = function(self, event, unit)
 		return element:Hide()
 	end 
 
-	if (factionID and IsFactionParagon(factionID)) then
-		local currentValue, threshold, _, hasRewardPending = GetFactionParagonInfo(factionID)
-		if (currentValue and threshold) then
-			min, max = 0, threshold
-			current = currentValue % threshold
-			if hasRewardPending then
-				current = current + threshold
+	if (IsRetail) then
+		if (factionID and IsFactionParagon(factionID)) then
+			local currentValue, threshold, _, hasRewardPending = GetFactionParagonInfo(factionID)
+			if (currentValue and threshold) then
+				min, max = 0, threshold
+				current = currentValue % threshold
+				if (hasRewardPending) then
+					current = current + threshold
+				end
 			end
 		end
 	end
@@ -114,20 +123,23 @@ local Update = function(self, event, unit)
 		local factionName, description, standingId, barMin, barMax, barValue, atWarWith, canToggleAtWar, isHeader, isCollapsed, hasRep, isWatched, isChild, factionID, hasBonusRepGain, canBeLFGBonus = GetFactionInfo(i)
 
 		if (factionName == name) then
-			local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(factionID)
+			if (IsRetail) then
+				local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(factionID)
 
-			if friendID then 
-				isFriend = true
-				if nextFriendThreshold then 
-					min = friendThreshold
-					max = nextFriendThreshold
-				else
-					min = 0
-					max = friendMaxRep
-					current = friendRep
+				if (friendID) then 
+					isFriend = true
+					if (nextFriendThreshold) then 
+						min = friendThreshold
+						max = nextFriendThreshold
+					else
+						min = 0
+						max = friendMaxRep
+						current = friendRep
+					end 
+					standingLabel = friendTextLevel
 				end 
-				standingLabel = friendTextLevel
-			end 
+			end
+
 			standingID = standingId
 			break
 		end
@@ -141,7 +153,7 @@ local Update = function(self, event, unit)
 		standingLabel = _G["FACTION_STANDING_LABEL"..standingID]
 	end
 
-	if element:IsObjectType("StatusBar") then 
+	if (element:IsObjectType("StatusBar")) then 
 		local barMax = max - min 
 		local barValue = current - min
 		if (barMax == 0) then 
@@ -151,13 +163,13 @@ local Update = function(self, event, unit)
 			element:SetMinMaxValues(0, max-min)
 			element:SetValue(current-min)
 		end 
-		if element.colorStanding then 
+		if (element.colorStanding) then 
 			local color = self.colors[isFriend and "friendship" or "reaction"][standingID]
 			element:SetStatusBarColor(color[1], color[2], color[3])
 		end 
 	end 
 	
-	if element.Value then 
+	if (element.Value) then 
 		(element.OverrideValue or element.UpdateValue) (element, current, min, max, name, standingID, standingLabel, isFriend)
 	end 
 	
@@ -165,7 +177,7 @@ local Update = function(self, event, unit)
 		element:Show()
 	end
 
-	if element.PostUpdate then 
+	if (element.PostUpdate) then 
 		return element:PostUpdate(current, min, max, name, standingID, standingLabel, isFriend)
 	end 
 	
@@ -201,6 +213,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)), (CogWheel("LibMinimap", true)) }) do 
-	Lib:RegisterElement("Reputation", Enable, Disable, Proxy, 7)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)), (Wheel("LibMinimap", true)) }) do 
+	Lib:RegisterElement("Reputation", Enable, Disable, Proxy, 2)
 end 

@@ -1,10 +1,7 @@
-local LibDB = CogWheel:Set("LibDB", 14)
+local LibDB = Wheel:Set("LibDB", 19)
 if (not LibDB) then	
 	return
 end
-
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "LibEvent requires LibDB to be loaded.")
 
 -- Lua API
 local _G = _G
@@ -13,8 +10,10 @@ local debugstack = debugstack
 local error = error
 local pairs = pairs
 local select = select
+local string_format = string.format
 local string_join = string.join
 local string_match = string.match
+local tostring = tostring
 local type = type
 
 -- WoW API
@@ -44,13 +43,13 @@ setmetatable(configs, { __index = function(tbl,key) tbl[key] = {} return tbl[key
 local check = function(value, num, ...)
 	assert(type(num) == "number", ("Bad argument #%.0f to '%s': %s expected, got %s"):format(2, "Check", "number", type(num)))
 	for i = 1,select("#", ...) do
-		if (type(value) == select(i, ...)) then 
+		if type(value) == select(i, ...) then 
 			return 
 		end
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 -- Deep copy a table into a new table 
@@ -166,6 +165,55 @@ LibDB.NewConfig = function(self, name, config, returnProfile)
 	return self:GetConfig(name, returnProfile)
 end
 
+-- Wipe away a set of settings from all profiles.
+-- Using this quite a lot in front-end modules,
+-- might as well make it a back-end feature.
+LibDB.PurgeSavedSettingFromAllProfiles = function(self, name, ...)
+	check(name, 1, "string")
+
+	-- Always silently fail if the config does not yet exist
+	local configDB = configs[tostring(self:GetOwner())]
+	if (not configDB[name]) then
+		return 
+	end	
+
+	local profiles = configDB[name].profiles
+	local numArgs = select("#", ...)
+	local config
+
+	-- Iterate realm configs
+	for realmName, config in pairs(profiles.realm) do
+		for i = 1,numArgs do
+			local key = select(i, ...)
+			config[key] = nil
+		end
+	end
+
+	-- Iterate realm configs
+	for factionName, config in pairs(profiles.faction) do
+		for i = 1,numArgs do
+			local key = select(i, ...)
+			config[key] = nil
+		end
+	end
+
+	-- Iterate realm configs
+	for charName, config in pairs(profiles.character) do
+		for i = 1,numArgs do
+			local key = select(i, ...)
+			config[key] = nil
+		end
+	end
+
+	-- Iterate global config
+	config = profiles.global
+	for i = 1,numArgs do
+		local key = select(i, ...)
+		config[key] = nil
+	end
+
+end
+
 -- If the 'profile' argument is left out, the 'global' profile will be returned
 -- The 'option' argument allows the module to retrieve options 
 -- for specific realms, characters or faction.
@@ -258,6 +306,7 @@ end
 local embedMethods = {
 	RegisterSavedVariablesGlobal = true,
 	ParseSavedVariables = true, 
+	PurgeSavedSettingFromAllProfiles = true,
 	NewConfig = true,
 	GetConfig = true,
 	GetConfigDefaults = true,

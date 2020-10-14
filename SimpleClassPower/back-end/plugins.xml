@@ -6,7 +6,6 @@
 <Script file='plugins\generic_coordinates.lua'/>
 <Script file='plugins\generic_difficulty.lua'/>
 <Script file='plugins\generic_framerate.lua'/>
-<Script file='plugins\generic_groupfinder.lua'/>
 <Script file='plugins\generic_honor.lua'/>
 <Script file='plugins\generic_latency.lua'/>
 <Script file='plugins\generic_mail.lua'/>
@@ -24,6 +23,7 @@
 <Script file='plugins\unit_crowdcontrol.lua'/>
 <Script file='plugins\unit_extrapower.lua'/>
 <Script file='plugins\unit_groupdebuff.lua'/>
+<Script file='plugins\unit_groupnumber.lua'/>
 <Script file='plugins\unit_grouprole.lua'/>
 <Script file='plugins\unit_health.lua'/>
 <Script file='plugins\unit_level.lua'/>
@@ -36,7 +36,6 @@
 <Script file='plugins\unit_raidtarget.lua'/>
 <Script file='plugins\unit_readycheck.lua'/>
 <Script file='plugins\unit_resurrectindicator.lua'/>
-<Script file='plugins\unit_spec.lua'/>
 <Script file='plugins\unit_status.lua'/>
 <Script file='plugins\unit_targeted.lua'/>
 <Script file='plugins\unit_targethighlight.lua'/>

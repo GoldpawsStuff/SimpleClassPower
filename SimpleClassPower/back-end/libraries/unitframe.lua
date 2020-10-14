@@ -1,19 +1,25 @@
-local LibUnitFrame = CogWheel:Set("LibUnitFrame", 63)
+local LibUnitFrame = Wheel:Set("LibUnitFrame", 81)
 if (not LibUnitFrame) then	
 	return
 end
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibUnitFrame requires LibEvent to be loaded.")
 
-local LibFrame = CogWheel("LibFrame")
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "LibUnitFrame requires LibFrame to be loaded.")
 
-local LibWidgetContainer = CogWheel("LibWidgetContainer")
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "LibSecureButton requires LibClientBuild to be loaded.")
+
+local LibWidgetContainer = Wheel("LibWidgetContainer")
 assert(LibWidgetContainer, "LibUnitFrame requires LibWidgetContainer to be loaded.")
 
-local LibTooltip = CogWheel("LibTooltip")
+local LibTooltip = Wheel("LibTooltip")
 assert(LibTooltip, "LibUnitFrame requires LibTooltip to be loaded.")
+
+local LibSound = Wheel("LibSound")
+assert(LibSound, "LibUnitFrame requires LibSound to be loaded.")
 
 LibEvent:Embed(LibUnitFrame)
 LibFrame:Embed(LibUnitFrame)
@@ -22,6 +28,9 @@ LibWidgetContainer:Embed(LibUnitFrame)
 
 -- Lua API
 local _G = _G
+local assert = assert
+local debugstack = debugstack
+local error = error
 local math_floor = math.floor
 local pairs = pairs
 local select = select
@@ -33,15 +42,24 @@ local string_match = string.match
 local table_insert = table.insert
 local table_remove = table.remove
 local tonumber = tonumber
+local type = type
 local unpack = unpack
 
 -- Blizzard API
-local CreateFrame = _G.CreateFrame
-local FriendsDropDown = _G.FriendsDropDown
-local ShowBossFrameWhenUninteractable = _G.ShowBossFrameWhenUninteractable
-local ToggleDropDownMenu = _G.ToggleDropDownMenu
-local UnitExists = _G.UnitExists
-local UnitGUID = _G.UnitGUID
+local CreateFrame = CreateFrame
+local FriendsDropDown = FriendsDropDown
+local SecureCmdOptionParse = SecureCmdOptionParse
+local ShowBossFrameWhenUninteractable = ShowBossFrameWhenUninteractable
+local ToggleDropDownMenu = ToggleDropDownMenu
+local UnitExists = UnitExists
+local UnitGUID = UnitGUID
+local UnitHasVehicleUI = UnitHasVehicleUI
+local UnitIsEnemy = UnitIsEnemy
+local UnitIsFriend = UnitIsFriend
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 -- Library Registries
 LibUnitFrame.embeds = LibUnitFrame.embeds or {} -- who embeds this?
@@ -120,12 +138,6 @@ local Colors = {
 	rested = prepare( 23/255, 93/255, 180/255 ),
 	restedbonus = prepare( 192/255, 111/255, 255/255 ),
 	tapped = prepare( 153/255, 153/255, 153/255 ),
-	threat = {
-		[0] = prepare( GetThreatStatusColor(0) ),
-		[1] = prepare( GetThreatStatusColor(1) ),
-		[2] = prepare( GetThreatStatusColor(2) ),
-		[3] = prepare( GetThreatStatusColor(3) )
-	},
 	xp = prepare( 18/255, 179/255, 21/255 )
 }
 
@@ -148,92 +160,10 @@ for powerType, powerColor in pairs(PowerBarColor) do
 	end 
 end 
 
--- Add support for custom class colors
-local customClassColors = function()
-	if CUSTOM_CLASS_COLORS then
-		local updateColors = function()
-			Colors.class = prepareGroup(CUSTOM_CLASS_COLORS)
-			for frame in pairs(frames) do 
-				frame:OverrideAllElements("CustomClassColors", frame.unit)
-			end 
-		end
-		updateColors()
-		CUSTOM_CLASS_COLORS:RegisterCallback(updateColors)
-		return true
-	end
-end
-if (not customClassColors()) then
-	LibUnitFrame.CustomClassColors = function(self, event, ...)
-		if customClassColors() then
-			self:UnregisterEvent("ADDON_LOADED", "CustomClassColors")
-			self.Listener = nil
-		end
-	end 
-	LibUnitFrame:RegisterEvent("ADDON_LOADED", "CustomClassColors")
-end
-
 -- Secure Snippets
 --------------------------------------------------------------------------
 local secureSnippets = {
-	initialConfigFunction = [=[
-		local header = self:GetParent()
-		local frames = table.new()
-		table.insert(frames, self)
-		self:GetChildList(frames)
-		for i = 1, #frames do
-			local frame = frames[i]
-			local unit
-			-- There's no need to do anything on frames with onlyProcessChildren
-			if (not frame:GetAttribute("oUF-onlyProcessChildren")) then
-				RegisterUnitWatch(frame)
 
-				-- Attempt to guess what the header is set to spawn.
-				local groupFilter = header:GetAttribute("groupFilter")
-
-				if(type(groupFilter) == "string" and groupFilter:match("MAIN[AT]")) then
-					local role = groupFilter:match("MAIN([AT])")
-					if(role == "T") then
-						unit = "maintank"
-					else
-						unit = "mainassist"
-					end
-				elseif(header:GetAttribute("showRaid")) then
-					unit = "raid"
-				elseif(header:GetAttribute("showParty")) then
-					unit = "party"
-				end
-
-				local headerType = header:GetAttribute("oUF-headerType")
-				local suffix = frame:GetAttribute("unitsuffix")
-				if(unit and suffix) then
-					if(headerType == "pet" and suffix == "target") then
-						unit = unit .. headerType .. suffix
-					else
-						unit = unit .. suffix
-					end
-				elseif(unit and headerType == "pet") then
-					unit = unit .. headerType
-				end
-
-				frame:SetAttribute("*type1", "target")
-				frame:SetAttribute("*type2", "togglemenu")
-				frame:SetAttribute("oUF-guessUnit", unit)
-			end
-
-			local body = header:GetAttribute("oUF-initialConfigFunction")
-			if(body) then
-				frame:Run(body, unit)
-			end
-		end
-
-		header:CallMethod("styleFunction", self:GetName())
-
-		local Clique = header:GetFrameRef("clickcast_header")
-		if Clique then
-			Clique:SetAttribute("clickcast_button", self)
-			Clique:RunAttribute("clickcast_register")
-		end
-	]=]
 }
 
 -- Utility Functions
@@ -248,7 +178,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 -- Library Updates
@@ -322,10 +252,20 @@ UnitFrame.OnLeave = function(self)
 	end 
 end
 
+UnitFrame.OnHide = function(self)
+	self.unitGUID = nil
+end
+
 UnitFrame.OverrideAllElements = function(self, event, ...)
 	local unit = self.unit
-	if (not unit) or (not (UnitExists(unit) or ShowBossFrameWhenUninteractable(unit))) then 
+	if (not unit) or (not UnitExists(unit) and not ShowBossFrameWhenUninteractable(unit)) then 
 		return 
+	end
+	if (self.isMouseOver) then
+		local OnEnter = self:GetScript("OnEnter")
+		if (OnEnter) then
+			OnEnter(self)
+		end
 	end
 	return self:UpdateAllElements(event, ...)
 end
@@ -334,12 +274,33 @@ end
 -- Intention is to avoid performance drops from people coming and going in PuG raids. 
 UnitFrame.OverrideAllElementsOnChangedGUID = function(self, event, ...)
 	local unit = self.unit
-	if (not unit) or (not (UnitExists(unit) or ShowBossFrameWhenUninteractable(unit))) then 
+	if (not unit) or (not UnitExists(unit) and not ShowBossFrameWhenUninteractable(unit)) then 
 		return 
 	end
 	local currentGUID = UnitGUID(unit)
-	if (self.unitGUID ~= currentGUID) then 
+	if currentGUID and (self.unitGUID ~= currentGUID) then 
 		self.unitGUID = currentGUID
+		if (self.isMouseOver) then
+			local OnEnter = self:GetScript("OnEnter")
+			if (OnEnter) then
+				OnEnter(self)
+			end
+		end
+		if (unit == "target") and (not self.noTargetChangeSoundFX) then
+			if (UnitExists("target")) then
+				-- Play a fitting sound depending on what kind of target we gained
+				if (UnitIsEnemy("target", "player")) then
+					LibSound:PlaySoundKitID(SOUNDKIT.IG_CREATURE_AGGRO_SELECT, "SFX")
+				elseif (UnitIsFriend("player", "target")) then
+					LibSound:PlaySoundKitID(SOUNDKIT.IG_CHARACTER_NPC_SELECT, "SFX")
+				else
+					LibSound:PlaySoundKitID(SOUNDKIT.IG_CREATURE_NEUTRAL_SELECT, "SFX")
+				end
+			else
+				-- Play a sound indicating we lost our target
+				LibSound:PlaySoundKitID(SOUNDKIT.INTERFACE_SOUND_LOST_TARGET_UNIT, "SFX")
+			end
+		end
 		return self:UpdateAllElements(event, ...)
 	end
 end
@@ -362,7 +323,7 @@ end
 --------------------------------------------------------------------------
 -- Return or create the library default tooltip
 LibUnitFrame.GetUnitFrameTooltip = function(self)
-	return LibUnitFrame:GetTooltip("CG_UnitFrameTooltip") or LibUnitFrame:CreateTooltip("CG_UnitFrameTooltip")
+	return LibUnitFrame:GetTooltip("GP_UnitFrameTooltip") or LibUnitFrame:CreateTooltip("GP_UnitFrameTooltip")
 end
 
 LibUnitFrame.SetScript = function(self, scriptHandler, script)
@@ -385,34 +346,71 @@ LibUnitFrame.GetScript = function(self, scriptHandler)
 	return scriptHandlers[scriptHandler]
 end
 
-LibUnitFrame.GetUnitFrameVisibilityDriver = function(self, unit)
+LibUnitFrame.GetUnitFrameVisibilityDriver = function(self, unit, hideInVehicles)
 	local visDriver
-	if (unit == "player") then 
-		-- Might seem stupid, but I want the player frame to disappear along with the actionbars 
-		-- when we've blown the flight master's whistle and are getting picked up.
-		visDriver = "[@player,exists][vehicleui][possessbar][overridebar][mounted]show;hide"
-	elseif (unit == "pet") then 
-		visDriver = "[@pet,exists][nooverridebar,vehicleui]show;hide"
+	if (unit == "player") then
+		if (IsClassic) then
+			visDriver = "[@player,exists][mounted]show;hide"
+		elseif (IsRetail) then
+			-- Might seem stupid, but I want the player frame to disappear along with the actionbars 
+			-- when we've blown the flight master's whistle and are getting picked up.
+			if (hideInVehicles) then
+				visDriver = "[vehicleui]hide;[@player,exists][possessbar][overridebar][mounted]show;hide"
+			else
+				visDriver = "[@player,exists][vehicleui][possessbar][overridebar][mounted]show;hide"
+			end
+		end
+	elseif (unit == "pet") then
+		if (IsRetail) then
+			-- Adding this to avoid situations where the player frame is hidden, 
+			-- yet a pet frame hovers in mid-air.
+			-- This only happens in short periods, like when a quest requires you to 
+			-- take a flight on a dragon to fly to or return to someplace.
+			-- Still, looks silly. We want it fixed.
+			local prefix = "[@player,noexists]hide;"
+			if (hideInVehicles) then
+				visDriver = prefix .. "[vehicleui]hide;[@pet,exists]show;hide"
+			else
+				visDriver = prefix .. "[@pet,exists][nooverridebar,vehicleui]show;hide"
+			end
+		end
 	else
-		visDriver = string_format("[@%s,exists]show;hide", unit)
+		local partyID = string_match(unit, "^party(%d+)")
+		if (partyID) then
+			if (hideInVehicles) then
+				visDriver = string_format("[vehicleui]hide;[nogroup:raid,@%s,exists]show;hide", unit)
+			else
+				visDriver = string_format("[nogroup:raid,@%s,exists]show;hide", unit)
+			end
+		end
 	end
-	return visDriver
+	if (visDriver) then
+		return visDriver
+	else
+		if (hideInVehicles) then
+			return string_format("[vehicleui]hide;[@%s,exists]show;hide", unit)
+		else
+			return string_format("[@%s,exists]show;hide", unit)
+		end
+	end
 end 
 
-LibUnitFrame.GetUnitFrameVehicleDriver = function(self, unit)
-	local vehicleDriver
-	if (unit == "player") then 
-		-- Should work in all cases where the unitframe is replaced. It should always be the "pet" unit.
-		--vehicleDriver = "[vehicleui]pet;player"
-		vehicleDriver = "[nooverridebar,vehicleui]pet;[overridebar,@vehicle,exists]vehicle;player"
-	elseif (unit == "pet") then 
-		vehicleDriver = "[nooverridebar,vehicleui]player;pet"
-	elseif (unit:match("^party(%d+)")) then 
-		vehicleDriver = string_format("[unithasvehicleui,@%s]%s;%s", unit, unit.."pet", unit)
-	elseif (unit:match("^raid(%d+)")) then 
-		vehicleDriver = string_format("[unithasvehicleui,@%s]%s;%s", unit, unit.."pet", unit)
+LibUnitFrame.GetUnitFrameUnitDriver = function(self, unit)
+	local unitDriver
+	if (IsRetail) then
+		if (unit == "player") then 
+			-- Should work in all cases where the unitframe is replaced. It should always be the "pet" unit.
+			--unitDriver = "[vehicleui]pet;player"
+			unitDriver = "[nooverridebar,vehicleui]pet;[overridebar,@vehicle,exists]vehicle;player"
+		elseif (unit == "pet") then 
+			unitDriver = "[nooverridebar,vehicleui]player;pet"
+		elseif (string_match(unit, "^party(%d+)")) then 
+			unitDriver = string_format("[unithasvehicleui,@%s]%s;%s", unit, unit.."pet", unit)
+		elseif (string_match(unit, "^raid(%d+)")) then 
+			unitDriver = string_format("[unithasvehicleui,@%s]%s;%s", unit, unit.."pet", unit)
+		end
 	end
-	return vehicleDriver
+	return unitDriver
 end 
 
 -- spawn and style a new unitframe
@@ -456,64 +454,77 @@ LibUnitFrame.SpawnUnitFrame = function(self, unit, parent, styleFunc, ...)
 		frame:RegisterForClicks("AnyUp")
 	end 
 
+	frame:SetScript("OnHide", UnitFrame.OnHide)
+
+	local OverrideAllElements = UnitFrame.OverrideAllElementsOnChangedGUID -- UnitFrame.OverrideAllElements
+
 	if (unit == "target") then
-		frame:RegisterEvent("PLAYER_TARGET_CHANGED", UnitFrame.OverrideAllElements, true)
+		frame:RegisterEvent("PLAYER_TARGET_CHANGED", OverrideAllElements, true)
 
 	elseif (unit == "focus") then
-		frame:RegisterEvent("PLAYER_FOCUS_CHANGED", UnitFrame.OverrideAllElements, true)
+		frame:RegisterEvent("PLAYER_FOCUS_CHANGED", OverrideAllElements, true)
 
 	elseif (unit == "mouseover") then
-		frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT", UnitFrame.OverrideAllElements, true)
-
-	elseif (unit:match("^boss(%d+)")) then
-		frame.unitGroup = "boss"
-
-		frame:SetFrameStrata("MEDIUM")
-		frame:SetFrameLevel(1000)
-		frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT", UnitFrame.OverrideAllElements, true)
-		frame:RegisterEvent("UNIT_TARGETABLE_CHANGED", UnitFrame.OverrideAllElements, true)
+		frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT", OverrideAllElements, true)
 
 	elseif (unit:match("^arena(%d+)")) then
 		frame.unitGroup = "arena"
-
 		frame:SetFrameStrata("MEDIUM")
 		frame:SetFrameLevel(1000)
-		frame:RegisterEvent("ARENA_OPPONENT_UPDATE", UnitFrame.OverrideAllElements, true)
+		frame:RegisterEvent("ARENA_OPPONENT_UPDATE", OverrideAllElements, true)
 
-	elseif (unit:match("^party(%d+)")) then 
+	elseif (string_match(unit, "^boss(%d+)")) then
+		frame.unitGroup = "boss"
+		frame:SetFrameStrata("MEDIUM")
+		frame:SetFrameLevel(1000)
+		frame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT", OverrideAllElements, true)
+		frame:RegisterEvent("UNIT_TARGETABLE_CHANGED", OverrideAllElements, true)
+
+	elseif (string_match(unit, "^party(%d+)")) then 
 		frame.unitGroup = "party"
-		frame:RegisterEvent("GROUP_ROSTER_UPDATE", UnitFrame.OverrideAllElements, true)
-		frame:RegisterEvent("UNIT_PET", UpdatePet)
+		frame:RegisterEvent("GROUP_ROSTER_UPDATE", OverrideAllElements, true)
+		if (IsRetail) then
+			frame:RegisterEvent("UNIT_PET", UpdatePet)
+		end
 
-	elseif (unit:match("^raid(%d+)")) then 
+	elseif (string_match(unit, "^raid(%d+)")) then 
 		frame.unitGroup = "raid"
 		frame:RegisterEvent("GROUP_ROSTER_UPDATE", UnitFrame.OverrideAllElementsOnChangedGUID, true)
-		frame:RegisterEvent("UNIT_PET", UpdatePet)
+		if (IsRetail) then
+			frame:RegisterEvent("UNIT_PET", UpdatePet)
+		end
 
-	elseif (unit:match("%w+target")) then
+	elseif (unit == "targettarget") then
+		-- Need an extra override event here so the ToT frame won't appear to lag behind on target changes.
+		frame:RegisterEvent("PLAYER_TARGET_CHANGED", OverrideAllElements, true)
+		frame:EnableFrameFrequent(.5, "unit")
+
+	elseif (string_match(unit, "%w+target")) then
 		frame:EnableFrameFrequent(.5, "unit")
 	end
 
-	local vehicleDriver = LibUnitFrame:GetUnitFrameVehicleDriver(unit)
-	if vehicleDriver then 
-		local vehicleSwitcher = CreateFrame("Frame", nil, nil, "SecureHandlerAttributeTemplate")
-		vehicleSwitcher:SetFrameRef("UnitFrame", frame)
-		vehicleSwitcher:SetAttribute("unit", unit)
-		vehicleSwitcher:SetAttribute("_onattributechanged", [=[
+	frame:SetAttribute("unit", unit)
+
+	local unitDriver = LibUnitFrame:GetUnitFrameUnitDriver(unit)
+	if (unitDriver) and (not frame.hideInVehicles) then 
+		local unitSwitcher = CreateFrame("Frame", nil, nil, "SecureHandlerAttributeTemplate")
+		unitSwitcher:SetFrameRef("UnitFrame", frame)
+		unitSwitcher:SetAttribute("unit", unit)
+		unitSwitcher:SetAttribute("_onattributechanged", [=[
 			local frame = self:GetFrameRef("UnitFrame"); 
 			frame:SetAttribute("unit", value); 
 		]=])
 		frame.realUnit = unit
-		frame:SetAttribute("unit", SecureCmdOptionParse(vehicleDriver))
-		RegisterAttributeDriver(vehicleSwitcher, "state-vehicleswitch", vehicleDriver)
+		frame:SetAttribute("unit", SecureCmdOptionParse(unitDriver))
+		RegisterAttributeDriver(unitSwitcher, "state-vehicleswitch", unitDriver)
 	else
 		frame:SetAttribute("unit", unit)
 	end 
 
-	local visDriver = LibUnitFrame:GetUnitFrameVisibilityDriver(unit)
-	if frame.visibilityOverrideDriver then 
+	local visDriver = LibUnitFrame:GetUnitFrameVisibilityDriver(unit, frame.hideInVehicles)
+	if (frame.visibilityOverrideDriver) then 
 		visDriver = frame.visibilityOverrideDriver
-	elseif frame.visibilityPreDriver then
+	elseif (frame.visibilityPreDriver) then
 		visDriver = frame.visibilityPreDriver .. visDriver
 	end
 
@@ -525,42 +536,13 @@ LibUnitFrame.SpawnUnitFrame = function(self, unit, parent, styleFunc, ...)
 	_G.ClickCastFrames = ClickCastFrames or {}
 	ClickCastFrames[frame] = true
 
-	frames[frame] = true 
+	frames[frame] = true
 
-	if frame.PostCreate then 
+	if (frame.PostCreate) then
 		frame:PostCreate()
 	end 
 	
 	return frame
-end
-
--- spawn and style a new group header
-LibUnitFrame.SpawnHeader = function(self, unit, parent, styleFunc, ...)
-	
-	local headerTemplate, unitTemplate
-	if _G.Clique then 
-		headerTemplate = "SecureGroupHeaderTemplate"
-		unitTemplate = "SecureUnitButtonTemplate, SecureHandlerStateTemplate, SecureHandlerEnterLeaveTemplate"
-	else 
-		headerTemplate = "SecureGroupHeaderTemplate"
-		unitTemplate = "SecureUnitButtonTemplate"
-	end 
-
-	local header = self:CreateFrame("Frame", nil, "UICenter", headerTemplate)
-	header:SetAttribute("template", unitTemplate)
-	header:SetAttribute("initialConfigFunction", secureSnippets.initialConfigFunction)
-	for i = 1, select("#", ...), 2 do
-		local attribute, value = select(i, ...)
-		if (not attribute) then 
-			break 
-		end
-		header:SetAttribute(attribute, value)
-	end
-	if _G.Clique then
-		header:SetFrameRef("clickcast_header", _G.Clique.header)
-	end
-
-	return header
 end
 
 -- Make this a proxy for development purposes
@@ -571,7 +553,6 @@ end
 -- Module embedding
 local embedMethods = {
 	SpawnUnitFrame = true,
-	GetUnitFrameVehicleDriver = true, 
 	GetUnitFrameVisibilityDriver = true, 
 	GetUnitFrameTooltip = true
 }

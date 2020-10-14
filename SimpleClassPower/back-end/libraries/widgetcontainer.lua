@@ -1,15 +1,15 @@
-local LibWidgetContainer = CogWheel:Set("LibWidgetContainer", 22)
+local LibWidgetContainer = Wheel:Set("LibWidgetContainer", 24)
 if (not LibWidgetContainer) then	
 	return
 end
 
-local LibMessage = CogWheel("LibMessage")
+local LibMessage = Wheel("LibMessage")
 assert(LibMessage, "LibWidgetContainer requires LibMessage to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibWidgetContainer requires LibEvent to be loaded.")
 
-local LibFrame = CogWheel("LibFrame")
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "LibWidgetContainer requires LibFrame to be loaded.")
 
 -- Embed event functionality into this
@@ -74,7 +74,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 -- Embed source methods into target.
@@ -174,6 +174,15 @@ WidgetFrame.OnAttributeChanged = function(self, attribute, value)
 
 			-- The above updates frame.unit
 			UpdateAllElements(self, "Forced", self.unit)
+
+			-- Update tooltip to new unit
+			if (self.isMouseOver) then
+				local OnEnter = self:GetScript("OnEnter")
+				if (OnEnter) then
+					OnEnter(self)
+				end
+			end
+
 			return true
 		end 
 	end
@@ -564,7 +573,7 @@ LibWidgetContainer.CreateWidgetContainer = function(self, frameType, parent, tem
 		for frame in pairs(frames) do 
 			counter = counter + 1
 		end 
-		name = "CG_UnitFrame_"..(counter + 1)
+		name = "GP_UnitFrame_"..(counter + 1)
 	end 
 
 	local frame = setmetatable(LibWidgetContainer:CreateFrame(frameType or "Frame", name, parent, template or "SecureHandlerAttributeTemplate"), WidgetFrame_MT)

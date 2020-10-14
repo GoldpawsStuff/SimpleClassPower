@@ -6,12 +6,12 @@ local select = select
 local unpack = unpack
 
 -- WoW API
-local GetMinimapZoneText = _G.GetMinimapZoneText
-local SetMapToCurrentZone = _G.SetMapToCurrentZone
+local GetMinimapZoneText = GetMinimapZoneText
+local IsResting = IsResting
+local SetMapToCurrentZone = SetMapToCurrentZone
 
--- WoW Frames
-local WorldMapFrame = _G.WorldMapFrame
-
+-- WoW Strings
+local L_RESTING = TUTORIAL_TITLE30
 
 -- RGB to Hex Color Code
 local hex = function(r, g, b)
@@ -57,7 +57,7 @@ Colors.zone.unknown = prepare( 255/255, 234/255, 137/255 ) -- instances, bgs, co
 
 
 local UpdateValue = function(element, minimapZoneName, pvpType)
-	if element.OverrideValue then
+	if (element.OverrideValue) then
 		return element:OverrideValue()
 	end
 	if (element:IsObjectType("FontString")) then 
@@ -76,7 +76,15 @@ local UpdateValue = function(element, minimapZoneName, pvpType)
 			r, g, b = unpack((element.colors or Colors).normal)
 			element:SetTextColor(r, g, b, a)
 		end 
-		element:SetText(minimapZoneName)
+		if (element.showResting) and (IsResting()) then
+			if (element.restingMsg) then
+				element:SetFormattedText("%s %s", minimapZoneName, element.restingMsg)
+			else
+				element:SetFormattedText("%s |cff888888(%s)|r", minimapZoneName, L_RESTING)
+			end
+		else
+			element:SetText(minimapZoneName)
+		end
 	end 
 end 
 
@@ -112,6 +120,7 @@ local Enable = function(self)
 		element.UpdateValue = UpdateValue
 
 		self:RegisterEvent("PLAYER_ENTERING_WORLD", Proxy, true)
+		self:RegisterEvent("PLAYER_UPDATE_RESTING", Proxy, true)
 		self:RegisterEvent("ZONE_CHANGED", Proxy, true)
 		self:RegisterEvent("ZONE_CHANGED_INDOORS", Proxy, true)
 		self:RegisterEvent("ZONE_CHANGED_NEW_AREA", Proxy, true)
@@ -131,6 +140,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)), (CogWheel("LibMinimap", true)) }) do 
-	Lib:RegisterElement("Zone", Enable, Disable, Proxy, 5)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)), (Wheel("LibMinimap", true)) }) do 
+	Lib:RegisterElement("Zone", Enable, Disable, Proxy, 7)
 end 

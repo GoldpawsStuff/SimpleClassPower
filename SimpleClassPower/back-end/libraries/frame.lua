@@ -1,25 +1,24 @@
-local LibFrame = CogWheel:Set("LibFrame", 54)
+local LibFrame = Wheel:Set("LibFrame", 66)
 if (not LibFrame) then	
 	return
 end
 
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "LibFrame requires LibClientBuild to be loaded.")
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "LibCast requires LibClientBuild to be loaded.")
 
-local LibMessage = CogWheel("LibMessage")
+local LibMessage = Wheel("LibMessage")
 assert(LibMessage, "LibFrame requires LibMessage to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibFrame requires LibEvent to be loaded.")
 
-local LibHook = CogWheel("LibHook")
+local LibHook = Wheel("LibHook")
 assert(LibHook, "LibFrame requires LibHook to be loaded.")
 
-local LibSecureHook = CogWheel("LibSecureHook")
+local LibSecureHook = Wheel("LibSecureHook")
 assert(LibSecureHook, "LibFrame requires LibSecureHook to be loaded.")
 
 -- Embed event functionality into this
-LibClientBuild:Embed(LibFrame)
 LibMessage:Embed(LibFrame)
 LibEvent:Embed(LibFrame)
 LibHook:Embed(LibFrame)
@@ -27,22 +26,33 @@ LibSecureHook:Embed(LibFrame)
 
 -- Lua API
 local _G = _G
+local assert = assert
+local debugstack = debugstack
+local error = error
 local getmetatable = getmetatable
 local math_floor = math.floor
+local math_max = math.max
+local math_min = math.min
 local pairs = pairs
 local pcall = pcall
 local select = select
+local string_format = string.format
+local string_join = string.join
 local string_match = string.match
 local type = type
 
 -- WoW API
-local CreateFrame = _G.CreateFrame
-local InCombatLockdown = _G.InCombatLockdown
-local IsLoggedIn = _G.IsLoggedIn
+local CreateFrame = CreateFrame
+local InCombatLockdown = InCombatLockdown
+local IsLoggedIn = IsLoggedIn
 
 -- WoW Objects
-local UIParent = _G.UIParent
-local WorldFrame = _G.WorldFrame
+local UIParent = UIParent
+local WorldFrame = WorldFrame
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 -- Default keyword used as a fallback. this will not be user editable.
 local KEYWORD_DEFAULT = "UICenter"
@@ -50,6 +60,13 @@ local KEYWORD_DEFAULT = "UICenter"
 -- Create the new frame parent 
 if (not LibFrame.frameParent) then
 	LibFrame.frameParent = LibFrame.frameParent or CreateFrame("Frame", nil, UIParent, "SecureHandlerAttributeTemplate")
+end 
+
+-- Create the cache frame
+if (not LibFrame.frameMemoryCache) then
+	LibFrame.frameMemoryCache = LibFrame.frameMemoryCache or CreateFrame("Frame", nil, UIParent)
+	LibFrame.frameMemoryCache:SetSize(2,2)
+	LibFrame.frameMemoryCache:SetPoint("BOTTOM", UIParent, "TOP", 0, 2)
 end 
 
 -- Create the UICenter frame
@@ -63,77 +80,66 @@ end
 
 -- Hide the master visibility frame if we haven't yet reached login. 
 -- This might improve addon loading time. 
-if (not IsLoggedIn()) and (not InCombatLockdown()) then 
-	LibFrame.frameParent:Hide()
-end
+--if (not IsLoggedIn()) and (not InCombatLockdown()) then 
+--	LibFrame.frameParent:Hide()
+--end
 
 -- Return a value rounded to the nearest integer.
-local round = function(value)
+local math_round = function(value)
 	return (value + .5) - (value + .5)%1
 end
 
-local SetDisplaySize = function()
+-- This doesn't check for parameter validity or combat status,
+-- so take care to only call this when it is safe to do so.
+local SetDisplaySize = function(ratio, altRatio, useSmallestRatio)
+	local width, height = WorldFrame:GetSize()
+	width = math_round(width)
+	height = math_round(height)
 
-	--Retrieve UIParent size
-	local width, height = UIParent:GetSize()
-	width = round(width)
-	height = round(height)
-
-	-- Set the size and take scale into consideration
-	local precision = 1e5
-	--local uiScale = UIParent:GetEffectiveScale()
-	--uiScale = ((uiScale*precision + .5) - (uiScale*precision + .5)%1)/precision
-
+	-- Set up default fullwidth values. Somewhat supportive of EyeFinity.
 	local scale = height/1080
-
 	local displayWidth = (((width/height) >= (16/10)*3) and width/3 or width)/scale
 	local displayHeight = height/scale
 	local displayRatio = displayWidth/displayHeight
 
-	-- Implement this later when we've create an API for it.
-	if false then 
-
-		-- Higher ratio means a narrower screen.
-		local desiredRatioMin = LibFrame.DesiredRatioMin or 4/3 -- 16/10 
-		local desiredRatioMax = LibFrame.DesiredRatioMax or 16/10 -- 16/9
-
-		local deviation = ((round(displayRatio*precision))/precision) - displayRatio
-
-		-- if the goal range exists, figure out which one to use. 
-		local min = ((desiredRatioMin - deviation) <= displayRatio) and ((desiredRatioMin + deviation) >= displayRatio)
-		local max = ((desiredRatioMax - deviation) <= displayRatio) and ((desiredRatioMax + deviation) >= displayRatio)
-
-		--print("Minratio, maxratio, deviation", desiredRatioMin, desiredRatioMax, deviation)
-
-		-- The desired ratio is within the bounds of the screen size, apply it!
-		if min then
-			displayWidth = round(displayHeight*desiredRatioMin)
-			--print("Going with Minratio, it's a fit!")
-		elseif max then 
-			displayWidth = round(displayHeight*desiredRatioMax)
-			--print("Going with Maxratio, it's a fit!")
-		else
-			if (displayRatio > desiredRatioMax) then
-				displayWidth = round(displayHeight*desiredRatioMax)
-				--print("Going with Maxratio, as it's closest to our goal")
-			elseif (displayRatio > desiredRatioMin) then 
-				displayWidth = round(displayHeight*desiredRatioMin)
-				--print("Going with Minratio, as it's closest to our goal")
-			end
-		end
+	-- If first arg is missing, use stored values if available.
+	if (not ratio) then
+		ratio = LibFrame.ratio
+		altRatio = LibFrame.altRatio
+		useSmallestRatio = LibFrame.useSmallestRatio
 	end
 
+	-- If a stored set of ratios exist, apply them.
+	if (ratio) then 
+		local ratioWidth = math_round(displayHeight*ratio)
+		local altRatioWidth = math_round(displayHeight*(altRatio or ratio))
+
+		local smallestWidth = math_min(displayWidth, math_min(ratioWidth, altRatioWidth))
+		local largestWidth = math_min(displayWidth, math_max(ratioWidth, altRatioWidth))
+
+		displayWidth = useSmallestRatio and smallestWidth or largestWidth
+	end
+	
+	-- If this is in combat, the world will implode. Take care!
+	LibFrame.frame:SetIgnoreParentScale(true)
 	LibFrame.frame:SetFrameStrata(UIParent:GetFrameStrata())
 	LibFrame.frame:SetFrameLevel(UIParent:GetFrameLevel())
 	LibFrame.frame:ClearAllPoints()
 	LibFrame.frame:SetPoint("BOTTOM", UIParent, "BOTTOM")
 	LibFrame.frame:SetScale(scale)
-	LibFrame.frame:SetSize(round(displayWidth), round(displayHeight))
-end 
+	LibFrame.frame:SetSize(math_round(displayWidth), math_round(displayHeight))
+end
 SetDisplaySize()
 
--- Keep it and all its children hidden during pet battles. 
-RegisterAttributeDriver(LibFrame.frame, "state-visibility", "[petbattle] hide; show")
+if (IsClassic) then
+	-- Forcefully re-show this in combat if somebody has hidden it.
+	RegisterAttributeDriver(LibFrame.frame, "state-visibility", "[combat]show;show")
+
+elseif (IsRetail) then
+	-- Keep it and all its children hidden during pet battles.
+	-- Forcefully re-show this in combat if somebody has hidden it.
+	RegisterAttributeDriver(LibFrame.frame, "state-visibility", "[petbattle]hide;[combat]show;show")
+end
 
 -- Keyword registry to translate words to frame handles used for anchoring or parenting
 LibFrame.keyWords = LibFrame.keyWords or { [KEYWORD_DEFAULT] = function() return LibFrame.frame end } 
@@ -150,6 +156,7 @@ local keyWords = LibFrame.keyWords
 
 -- Our special frames
 local DisplayFrame = LibFrame.frame
+local MemoryCacheFrame = LibFrame.frameMemoryCache
 local VisibilityFrame = LibFrame.frameParent
 
 -- Frame meant for events, timers, etc
@@ -167,6 +174,19 @@ local blizzSetHeight = FrameMethods.SetHeight
 
 -- Utility Functions
 -----------------------------------------------------------------
+-- Syntax check 
+local check = function(value, num, ...)
+	assert(type(num) == "number", ("Bad argument #%.0f to '%s': %s expected, got %s"):format(2, "Check", "number", type(num)))
+	for i = 1,select("#", ...) do
+		if type(value) == select(i, ...) then 
+			return 
+		end
+	end
+	local types = string_join(", ", ...)
+	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
+end
+
 -- Translate keywords to frame handles used for anchoring.
 local parseAnchor = function(anchor)
 	return anchor and (keyWords[anchor] and keyWords[anchor]() or _G[anchor] and _G[anchor] or anchor) or KEYWORD_DEFAULT and keyWords[KEYWORD_DEFAULT]() or WorldFrame
@@ -177,13 +197,23 @@ local parseAnchorStrict = function(anchor)
 	return anchor and (keyWords[anchor] and keyWords[anchor]() or _G[anchor] and _G[anchor] or anchor) 
 end
 
+local parseTemplate = function(template)
+	if (template) then
+		if (BackdropTemplateMixin) then
+			template = "BackdropTemplate,"..template
+		end
+	else
+		template = (BackdropTemplateMixin) and "BackdropTemplate" or nil
+	end
+	return template
+end
+
 -- WoW 8.2 restricted frame check
 local isRestricted = function(frame)
 	if (frame and (not pcall(frame.GetPoint, frame))) then
 		return true
 	end
 end
-
 
 -- Embed source methods into target.
 local embed = function(target, source)
@@ -285,7 +315,7 @@ local frameWidgetPrototype = {
 local framePrototype
 framePrototype = {
 	CreateFrame = function(self, frameType, frameName, template) 
-		local frame = embed(CreateFrame(frameType or "Frame", frameName, self, template), framePrototype)
+		local frame = embed(CreateFrame(frameType or "Frame", frameName, self, parseTemplate(template)), framePrototype)
 		frames[frame] = true
 		return frame
 	end,
@@ -338,6 +368,9 @@ LibFrame.CreateFrame = function(self, frameType, frameName, parent, template)
 	-- the 'parent' argument in the same manner the inherited frame method does.
 	-- Because we don't really want two different syntaxes. 
 	local parsedAnchor = parseAnchorStrict(parent)
+	if (template) then 
+		template = parseTemplate(template)
+	end
 	if (not parsedAnchor) then 
 		parsedAnchor = self.IsObjectType and parseAnchor(self) or parseAnchor(parent)
 		if (type(parent) == "string") and (not template) then 
@@ -358,6 +391,32 @@ end
 -- keyworded anchor > anchor > module.frame > UICenter
 LibFrame.GetFrame = function(self, anchor)
 	return anchor and parseAnchor(anchor) or self.frame or DisplayFrame
+end
+
+-- Texture Memory Cache
+-----------------------------------------------------------------
+-- The idea here is that texture kept visible, even off-screen.
+LibFrame.CreateTextureCache = function(self, texturePath)
+	if (not MemoryCacheFrame[texturePath]) then
+		MemoryCacheFrame[texturePath] = MemoryCacheFrame:CreateTexture(nil, "ARTWORK")
+		MemoryCacheFrame[texturePath]:SetSize(2,2)
+		MemoryCacheFrame[texturePath]:SetAlpha(0)
+		MemoryCacheFrame[texturePath]:SetPoint("BOTTOM")
+	end
+end
+
+LibFrame.SetAspectRatio = function(self, ratio, altRatio, useSmallestRatio)
+	check(ratio, 1, "number", "nil")
+	check(altRatio, 2, "number", "nil")
+	check(useSmallest, 3, "boolean", "nil")
+
+	-- Store the values in the library
+	LibFrame.ratio = ratio
+	LibFrame.altRatioWidth = altRatio
+	LibFrame.useSmallestRatio = useSmallestRatio
+
+	-- Attempt to apply, or queue up to combat end.
+	LibFrame:UpdateDisplaySize()
 end
 
 LibFrame.UpdateDisplaySize = function(self)
@@ -397,16 +456,16 @@ LibFrame.Enable = function(self)
 
 	-- Hide the visibility frame when reloading
 	-- The idea is to just stop all running OnUpdate handlers
-	self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnReload")
-	self:RegisterEvent("PLAYER_LEAVING_WORLD", "OnReload")
+	--self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnReload")
+	--self:RegisterEvent("PLAYER_LEAVING_WORLD", "OnReload")
 
 	-- New system only needs to capture changes and events
 	-- affecting display size or the cinematic frame visibility.
 	self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent")
 
 	-- Register for changes to the parent frames
-	self:RegisterMessage("CG_WORLD_SCALE_UPDATE", "OnEvent")
-	self:RegisterMessage("CG_INTERFACE_SCALE_UPDATE", "OnEvent")
+	self:RegisterMessage("GP_WORLD_SCALE_UPDATE", "OnEvent")
+	self:RegisterMessage("GP_INTERFACE_SCALE_UPDATE", "OnEvent")
 	
 	-- Could it be enough to just track frame changes and not events?
 	self:SetHook(UIParent, "OnSizeChanged", "UpdateDisplaySize", "LibFrame_UIParent_OnSizeChanged")
@@ -419,8 +478,10 @@ LibFrame:Enable()
 -- Module embedding
 local embedMethods = {
 	CreateFrame = true,
+	CreateTextureCache = true,
 	GetFrame = true,
-	RegisterKeyword = true
+	RegisterKeyword = true,
+	SetAspectRatio = true
 }
 
 LibFrame.Embed = function(self, target)

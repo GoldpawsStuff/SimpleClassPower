@@ -1,4 +1,4 @@
-## Interface: 80205
+## Interface: 90100
 ## Name: SimpleClassPower
 ## Title: |c00000001|r|cffa335eeS|r|cff912fd4i|r|cff7f29bam|r|cff6f24a1p|r|cff5d1e88l|r|cff4c196ee|r|cffffffffC|r|cffeeeeeel|r|cffdddddda|r|cffccccccs|r|cffbbbbbbs|r|cffffffffP|r|cffeeeeeeo|r|cffddddddw|r|cffcccccce|r|cffbbbbbbr|r
 ## Author: Lars Norberg
@@ -8,9 +8,6 @@
 ## SavedVariables: SimpleClassPower_DB
 ## X-Discord: https://discord.gg/MUSfWXd
 ## X-Category: Interface Enhancements
-
-# Unique global addon font objects
-FontStyles.xml
 
 # Addon libraries & plugins, the main engine of it all
 back-end\wheel.lua

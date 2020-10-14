@@ -1,5 +1,5 @@
 local ADDON = ...
-local L = CogWheel("LibLocale"):NewLocale(ADDON, "enUS", true)
+local L = Wheel("LibLocale"):NewLocale(ADDON, "enUS", true)
 
 -- Chat command menu
 L["/scp - Toggle the overlay for moving/scaling."] = "|cffa365ee/scp|r - Toggle the overlay for moving/scaling."

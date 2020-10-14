@@ -1,16 +1,18 @@
-local LibChatBubble = CogWheel:Set("LibChatBubble", 14)
+local LibChatBubble = Wheel:Set("LibChatBubble", 20)
 if (not LibChatBubble) then	
 	return
 end
 
--- We require this library to properly handle startup events
-local LibClientBuild = CogWheel("LibClientBuild")
+local LibClientBuild = Wheel("LibClientBuild")
 assert(LibClientBuild, "LibChatBubble requires LibClientBuild to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibChatBubble requires LibEvent to be loaded.")
 
-local LibHook = CogWheel("LibHook")
+local LibHook = Wheel("LibHook")
+assert(LibHook, "LibChatBubble requires LibHook to be loaded.")
+
+local LibHook = Wheel("LibHook")
 assert(LibHook, "LibChatBubble requires LibHook to be loaded.")
 
 -- Embed event functionality into this
@@ -18,8 +20,6 @@ LibEvent:Embed(LibChatBubble)
 LibHook:Embed(LibChatBubble)
 
 -- Lua API
-local _G = _G
-
 local ipairs = ipairs
 local math_abs = math.abs
 local math_floor = math.floor
@@ -28,12 +28,17 @@ local select = select
 local tostring = tostring
 
 -- WoW API
-local C_ChatBubbles_GetAllChatBubbles = _G.C_ChatBubbles.GetAllChatBubbles
-local CreateFrame = _G.CreateFrame
-local InCombatLockdown = _G.InCombatLockdown
-local IsInInstance = _G.IsInInstance
-local SetCVar = _G.SetCVar
-local UnitAffectingCombat = _G.UnitAffectingCombat
+local CreateFrame = CreateFrame
+local GetAllChatBubbles = C_ChatBubbles.GetAllChatBubbles
+local InCombatLockdown = InCombatLockdown
+local IsInInstance = IsInInstance
+local SetCVar = SetCVar
+local UnitAffectingCombat = UnitAffectingCombat
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
+local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Textures
 local BLANK_TEXTURE = [[Interface\ChatFrame\ChatFrameBackground]]
@@ -48,6 +53,19 @@ LibChatBubble.messageToSender = LibChatBubble.messageToSender or {}
 LibChatBubble.customBubbles = LibChatBubble.customBubbles or {} -- local bubble registry
 LibChatBubble.numChildren = LibChatBubble.numChildren or -1 -- worldframe children
 LibChatBubble.numBubbles = LibChatBubble.numBubbles or 0 -- worldframe customBubbles
+LibChatBubble.fontObject = LibChatBubble.fontObject or Game12Font_o1
+LibChatBubble.fontSize = LibChatBubble.fontSize or 12
+
+-- Visibility settings
+for k,v in pairs({
+	showInInstances = false, combatHideInInstances = true,
+	showInWorld = true, combatHideInWorld = true
+}) do
+	-- If the value doesn't exist, set it to default
+	if (LibChatBubble[k] == nil) then
+		LibChatBubble[k] = v
+	end
+end
 
 -- Custom Bubble parent frame
 LibChatBubble.BubbleBox = LibChatBubble.BubbleBox or CreateFrame("Frame", nil, UIParent)
@@ -64,16 +82,15 @@ local bubbleUpdater = LibChatBubble.BubbleUpdater
 local messageToGUID = LibChatBubble.messageToGUID
 local messageToSender = LibChatBubble.messageToSender
 
-local minsize, maxsize, fontsize = 12, 16, 12 -- bubble font size
 local offsetX, offsetY = 0, -100 -- bubble offset from its original position
 
 local getPadding = function()
-	return fontsize / 1.2
+	return LibChatBubble.fontSize/1.2
 end
 
 -- let the bubble size scale from 400 to 660ish (font size 22)
 local getMaxWidth = function()
-	return 400 + math_floor((fontsize - 12)/22 * 260)
+	return 400 + math_floor((LibChatBubble.fontSize - 12)/22 * 260)
 end
 
 local getBackdrop = function(scale) 
@@ -109,7 +126,7 @@ local OnUpdate = function(self)
 	-- 		bubble, customBubble.blizzardText = original bubble and message
 	-- 		customBubbles[bubble], customBubbles[bubble].text = our custom bubble and message
 	local scale = WorldFrame:GetHeight()/UIParent:GetHeight()
-	for _, bubble in pairs(C_ChatBubbles_GetAllChatBubbles()) do
+	for _, bubble in pairs(GetAllChatBubbles()) do
 
 		if (not customBubbles[bubble]) then 
 			LibChatBubble:InitBubble(bubble)
@@ -176,8 +193,6 @@ local OnUpdate = function(self)
 			end
 		end
 	end
-
-
 	for bubble in pairs(customBubbles) do 
 		if (not bubble:IsShown()) and (customBubbles[bubble]:IsShown()) then 
 			customBubbles[bubble]:Hide()
@@ -216,10 +231,31 @@ LibChatBubble.EnableBlizzard = function(self, bubble)
 	end
 end
 
+LibChatBubble.SetBlizzardBubbleFontObject = function(self, fontObject)
+	ChatBubbleFont:SetFontObject(fontObject)
+end
+
+LibChatBubble.SetBubbleFontObject = function(self, fontObject)
+	LibChatBubble.fontObject = fontObject
+	fontObject = LibChatBubble:GetFontObject()
+
+	local font, fontSize = fontObject:GetFont()
+	LibChatBubble.fontSize = fontSize
+
+	for bubble,customBubble in pairs(customBubbles) do
+		customBubble.text:SetFontObject(fontObject)
+	end
+end
+
+LibChatBubble.GetFontObject = function(self)
+	return LibChatBubble.fontObject or Game12Font_o1
+end
+
+
 LibChatBubble.InitBubble = function(self, bubble)
 	LibChatBubble.numBubbles = LibChatBubble.numBubbles + 1
 
-	local customBubble = CreateFrame("Frame", nil, bubbleBox)
+	local customBubble = CreateFrame("Frame", nil, bubbleBox, BackdropTemplateMixin and "BackdropTemplate")
 	customBubble:Hide()
 	customBubble:SetFrameStrata("BACKGROUND")
 	customBubble:SetFrameLevel(LibChatBubble.numBubbles%128 + 1) -- try to avoid overlapping bubbles blending into each other
@@ -232,16 +268,33 @@ LibChatBubble.InitBubble = function(self, bubble)
 	
 	customBubble.text = customBubble:CreateFontString()
 	customBubble.text:SetPoint("BOTTOMLEFT", 12, 12)
-	customBubble.text:SetFontObject(Game12Font_o1) 
+	customBubble.text:SetFontObject(LibChatBubble:GetFontObject()) 
 	customBubble.text:SetShadowOffset(0, 0)
 	customBubble.text:SetShadowColor(0, 0, 0, 0)
 	
-	for i = 1, bubble:GetNumRegions() do
-		local region = select(i, bubble:GetRegions())
-		if (region:GetObjectType() == "Texture") then
-			customBubble.blizzardRegions[region] = region:GetTexture()
-		elseif (region:GetObjectType() == "FontString") then
-			customBubble.blizzardText = region
+	-- Chat bubble has been moved to a nameless subframe in 9.0.1
+	if (IsRetailShadowlands) then
+		for i = 1, bubble:GetNumChildren() do
+			local child = select(i, select(i, bubble:GetChildren()))
+			if (child:GetObjectType() == "Frame") and (child.String) and (child.Center) then
+				for i = 1, child:GetNumRegions() do
+					local region = select(i, child:GetRegions())
+					if (region:GetObjectType() == "Texture") then
+						customBubble.blizzardRegions[region] = region:GetTexture()
+					elseif (region:GetObjectType() == "FontString") then
+						customBubble.blizzardText = region
+					end
+				end
+			end
+		end
+	else
+		for i = 1, bubble:GetNumRegions() do
+			local region = select(i, bubble:GetRegions())
+			if (region:GetObjectType() == "Texture") then
+				customBubble.blizzardRegions[region] = region:GetTexture()
+			elseif (region:GetObjectType() == "FontString") then
+				customBubble.blizzardText = region
+			end
 		end
 	end
 
@@ -302,6 +355,26 @@ LibChatBubble.UpdateBubbleVisibility = function(self)
 	end
 end
 
+LibChatBubble.SetBubbleVisibleInInstances = function(self, showInInstances)
+	LibChatBubble.showInInstances = showInInstances
+	LibChatBubble:OnEvent("PLAYER_ENTERING_WORLD")
+end
+
+LibChatBubble.SetBubbleVisibleInWorld = function(self, showInWorld)
+	LibChatBubble.showInWorld = showInWorld
+	LibChatBubble:OnEvent("PLAYER_ENTERING_WORLD")
+end
+
+LibChatBubble.SetBubbleCombatHideInInstances = function(self, combatHideInInstances)
+	LibChatBubble.combatHideInInstances = combatHideInInstances
+	LibChatBubble:OnEvent("PLAYER_ENTERING_WORLD")
+end
+
+LibChatBubble.SetBubbleCombatHideInWorld = function(self, combatHideInWorld)
+	LibChatBubble.combatHideInWorld = combatHideInWorld
+	LibChatBubble:OnEvent("PLAYER_ENTERING_WORLD")
+end
+
 LibChatBubble.EnableBubbleStyling = function(self)
 	LibChatBubble.stylingEnabled = true
 	LibChatBubble:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent")
@@ -319,7 +392,7 @@ LibChatBubble.DisableBubbleStyling = function(self)
 end 
 
 LibChatBubble.GetAllChatBubbles = function(self)
-	return pairs(C_ChatBubbles_GetAllChatBubbles())
+	return pairs(GetAllChatBubbles())
 end
 
 LibChatBubble.OnEvent = function(self, event, ...)
@@ -331,37 +404,56 @@ LibChatBubble.OnEvent = function(self, event, ...)
 			return self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnEvent")
 		end
 
-		if self.stylingEnabled then 
+		if (self.stylingEnabled) then
 			local _, instanceType = IsInInstance()
 			if (instanceType == "none") then
-				if UnitAffectingCombat("player") then 
+				if (self.showInWorld) then
+					if (self.combatHideInWorld) then
+						-- We could be sent here by PLAYER_REGEN_DISABLED,
+						-- which fires before combat lockdown starts.
+						-- UnitAffectingCombat already returns true at this point,
+						-- and can thus be used to toggle CVars before/after combat.
+						-- I think.
+						if (UnitAffectingCombat("player")) then
+							SetCVar("chatBubbles", 0)
+						else
+							SetCVar("chatBubbles", 1)
+						end
+					else
+						SetCVar("chatBubbles", 1)
+					end
+				else
 					SetCVar("chatBubbles", 0)
-				else 
-					SetCVar("chatBubbles", 1)
-				end 
-				--SetCVar("chatBubbles", 1)
+				end
 			else
-				if UnitAffectingCombat("player") then 
+				if (self.showInInstances) then
+					if (self.combatHideInInstances) then
+						if (UnitAffectingCombat("player")) then
+							SetCVar("chatBubbles", 0)
+						else
+							SetCVar("chatBubbles", 1)
+						end
+					else
+						SetCVar("chatBubbles", 1)
+					end
+				else
 					SetCVar("chatBubbles", 0)
-				else 
-					SetCVar("chatBubbles", 1)
-				end 
-				--SetCVar("chatBubbles", 0)
+				end
 			end
 
-			self:SetHook(UIParent, "OnHide", "UpdateBubbleVisibility", "CG_UIPARENT_ONHIDE_BUBBLEUPDATE")
-			self:SetHook(UIParent, "OnShow", "UpdateBubbleVisibility", "CG_UIPARENT_ONSHOW_BUBBLEUPDATE")
-			self:SetHook(CinematicFrame, "OnHide", "UpdateBubbleVisibility", "CG_CINEMATICFRAME_ONHIDE_BUBBLEUPDATE")
-			self:SetHook(CinematicFrame, "OnShow", "UpdateBubbleVisibility", "CG_CINEMATICFRAME_ONSHOW_BUBBLEUPDATE")
-			self:SetHook(MovieFrame, "OnHide", "UpdateBubbleVisibility", "CG_MOVIEFRAME_ONHIDE_BUBBLEUPDATE")
-			self:SetHook(MovieFrame, "OnShow", "UpdateBubbleVisibility", "CG_MOVIEFRAME_ONSHOW_BUBBLEUPDATE")
+			self:SetHook(UIParent, "OnHide", "UpdateBubbleVisibility", "GP_UIPARENT_ONHIDE_BUBBLEUPDATE")
+			self:SetHook(UIParent, "OnShow", "UpdateBubbleVisibility", "GP_UIPARENT_ONSHOW_BUBBLEUPDATE")
+			self:SetHook(CinematicFrame, "OnHide", "UpdateBubbleVisibility", "GP_CINEMATICFRAME_ONHIDE_BUBBLEUPDATE")
+			self:SetHook(CinematicFrame, "OnShow", "UpdateBubbleVisibility", "GP_CINEMATICFRAME_ONSHOW_BUBBLEUPDATE")
+			self:SetHook(MovieFrame, "OnHide", "UpdateBubbleVisibility", "GP_MOVIEFRAME_ONHIDE_BUBBLEUPDATE")
+			self:SetHook(MovieFrame, "OnShow", "UpdateBubbleVisibility", "GP_MOVIEFRAME_ONSHOW_BUBBLEUPDATE")
 		else
-			self:ClearHook(UIParent, "OnHide", "UpdateBubbleVisibility", "CG_UIPARENT_ONHIDE_BUBBLEUPDATE")
-			self:ClearHook(UIParent, "OnShow", "UpdateBubbleVisibility", "CG_UIPARENT_ONSHOW_BUBBLEUPDATE")
-			self:ClearHook(CinematicFrame, "OnHide", "UpdateBubbleVisibility", "CG_CINEMATICFRAME_ONHIDE_BUBBLEUPDATE")
-			self:ClearHook(CinematicFrame, "OnShow", "UpdateBubbleVisibility", "CG_CINEMATICFRAME_ONSHOW_BUBBLEUPDATE")
-			self:ClearHook(MovieFrame, "OnHide", "UpdateBubbleVisibility", "CG_MOVIEFRAME_ONHIDE_BUBBLEUPDATE")
-			self:ClearHook(MovieFrame, "OnShow", "UpdateBubbleVisibility", "CG_MOVIEFRAME_ONSHOW_BUBBLEUPDATE")
+			self:ClearHook(UIParent, "OnHide", "UpdateBubbleVisibility", "GP_UIPARENT_ONHIDE_BUBBLEUPDATE")
+			self:ClearHook(UIParent, "OnShow", "UpdateBubbleVisibility", "GP_UIPARENT_ONSHOW_BUBBLEUPDATE")
+			self:ClearHook(CinematicFrame, "OnHide", "UpdateBubbleVisibility", "GP_CINEMATICFRAME_ONHIDE_BUBBLEUPDATE")
+			self:ClearHook(CinematicFrame, "OnShow", "UpdateBubbleVisibility", "GP_CINEMATICFRAME_ONSHOW_BUBBLEUPDATE")
+			self:ClearHook(MovieFrame, "OnHide", "UpdateBubbleVisibility", "GP_MOVIEFRAME_ONHIDE_BUBBLEUPDATE")
+			self:ClearHook(MovieFrame, "OnShow", "UpdateBubbleVisibility", "GP_MOVIEFRAME_ONSHOW_BUBBLEUPDATE")
 		end 
 
 		self:UpdateBubbleVisibility()
@@ -373,14 +465,20 @@ LibChatBubble.OnEvent = function(self, event, ...)
 		return self:OnEvent("PLAYER_ENTERING_WORLD")
 
 	end
-end 
+end
 
 -- Module embedding
 local embedMethods = {
 	EnableBubbleStyling = true,
 	DisableBubbleStyling = true,
+	SetBlizzardBubbleFontObject = true,
+	SetBubbleFontObject = true,
 	SetBubblePostCreateFunc = true,
-	SetBubblePostUpdateFunc = true
+	SetBubblePostUpdateFunc = true,
+	SetBubbleVisibleInInstances = true,
+	SetBubbleVisibleInWorld = true,
+	SetBubbleCombatHideInInstances = true,
+	SetBubbleCombatHideInWorld = true
 }
 
 LibChatBubble.Embed = function(self, target)

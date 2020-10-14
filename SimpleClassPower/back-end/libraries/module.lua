@@ -1,12 +1,12 @@
-local LibModule = CogWheel:Set("LibModule", 35)
+local LibModule = Wheel:Set("LibModule", 39)
 if (not LibModule) then	
 	return
 end
 
-local LibMessage = CogWheel("LibMessage")
+local LibMessage = Wheel("LibMessage")
 assert(LibMessage, "LibModule requires LibMessage to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibModule requires LibEvent to be loaded.")
 
 -- Embed event functionality into this
@@ -23,6 +23,7 @@ local math_ceil = math.ceil
 local pairs = pairs
 local select = select
 local setmetatable = setmetatable
+local string_format = string.format
 local string_join = string.join
 local string_lower = string.lower
 local string_match = string.match
@@ -34,21 +35,20 @@ local tostring = tostring
 local type = type
 
 -- WoW API
-local GetAddOnEnableState = _G.GetAddOnEnableState
-local GetAddOnInfo = _G.GetAddOnInfo
-local GetBuildInfo = _G.GetBuildInfo
-local GetNumAddOns = _G.GetNumAddOns
-local IsAddOnLoaded = _G.IsAddOnLoaded
-local IsLoggedIn = _G.IsLoggedIn
-local IsShiftKeyDown = _G.IsShiftKeyDown
-local UnitName = _G.UnitName
+local GetAddOnEnableState = GetAddOnEnableState
+local GetAddOnInfo = GetAddOnInfo
+local GetBuildInfo = GetBuildInfo
+local GetNumAddOns = GetNumAddOns
+local IsAddOnLoaded = IsAddOnLoaded
+local IsLoggedIn = IsLoggedIn
+local IsShiftKeyDown = IsShiftKeyDown
+local UnitName = UnitName
 
 -- Library registries
-LibModule.classicEnableList = LibModule.classicEnableList or {} -- table holding modules only compatible with Classic
-LibModule.classicDisableList = LibModule.classicDisableList or {} -- table holding modules incompatible with Classic
 LibModule.addonDependencies = LibModule.addonDependencies or {} -- table holding module/widget/handler dependencies
 LibModule.addonIncompatibilities = LibModule.addonIncompatibilities or {} -- table holding module/widget/handler incompatibilities
 LibModule.addonIsLoaded = LibModule.addonIsLoaded or {}
+LibModule.userDisabledModules = LibModule.userDisabledModules or {}
 LibModule.embeds = LibModule.embeds or {}
 LibModule.enabledModules = LibModule.enabledModules or {}
 LibModule.frame = LibModule.frame or CreateFrame("Frame") -- why?
@@ -59,7 +59,6 @@ LibModule.moduleAddon = LibModule.moduleAddon or {}
 LibModule.moduleLoadPriority = LibModule.moduleLoadPriority or { HIGH = {}, NORMAL = {}, LOW = {}, PLUGIN = {} }
 LibModule.moduleName = LibModule.moduleName or {}
 LibModule.parentModule = LibModule.parentModule or {}
-LibModule.conflictLists = LibModule.conflictLists or {}
 
 -- Library constants
 local PRIORITY_HASH = { HIGH = true, NORMAL = true, LOW = true, PLUGIN = true } -- hashed priority table, for faster validity checks
@@ -67,19 +66,17 @@ local PRIORITY_INDEX = { "HIGH", "NORMAL", "LOW", "PLUGIN" } -- indexed/ordered 
 local DEFAULT_MODULE_PRIORITY = "NORMAL" -- default load priority for new modules
 
 -- Speed shortcuts
-local classicEnableList = LibModule.classicEnableList
-local classicDisableList = LibModule.classicDisableList
 local addonDependencies = LibModule.addonDependencies
 local addonIncompatibilities = LibModule.addonIncompatibilities
 local addonIsLoaded = LibModule.addonIsLoaded
 local debugFrame = LibModule.debugFrame
+local userDisabledModules = LibModule.userDisabledModules
 local enabledModules = LibModule.enabledModules 
 local initializedModules = LibModule.initializedModules 
 local moduleAddon = LibModule.moduleAddon
 local moduleName = LibModule.moduleName 
 local modules = LibModule.modules
 local parentModule = LibModule.parentModule
-local conflictLists = LibModule.conflictLists
 
 -- Set up the global debug frame
 do 
@@ -181,7 +178,7 @@ do
 
 		elseif (button == "RightButton") then 
 			debugFrame:Hide()
-			LibModule:SendMessage("CG_DEBUG_FRAME_CLOSED")
+			LibModule:SendMessage("GP_DEBUG_FRAME_CLOSED")
 		end	
 	end)
 
@@ -197,7 +194,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 -------------------------------------------------------------
@@ -205,19 +202,21 @@ end
 -------------------------------------------------------------
 local ModuleProtoType = {
 	Init = function(self, ...)
+		if (self:IsUserDisabled()) or (self:DependencyFailed()) then
+			return
+		end
+
 		local isIncompatible, conflictingAddon = self:IsIncompatible()
 		if (isIncompatible) then 
 			if (self:IsTopLevel()) then 
 				local ourAddon = self:GetAddon()
-				if (ourAddon) and (conflictLists[ourAddon] ~= conflictingAddon) then
-					conflictLists[conflictingAddon] = ourAddon
-					local ourName = GetAddOnMetadata(ourAddon, "Title") or ourAddon
-					local conflictingAddonName = GetAddOnMetadata(conflictingAddon, "Title") or conflictingAddon
+				local ourName = ourAddon and GetAddOnMetadata(ourAddon, "Title") or ourAddon
+				local conflictingAddonName = conflictingAddon and GetAddOnMetadata(conflictingAddon, "Title") or conflictingAddon
+				if (ourName) and (conflictingAddonName) then
 					print(("|cffcc0000Cannot have both |r|cff888888'|r%s|cff888888'|r|cffcc0000 and |r|cff888888'|r%s|cff888888'|r|cffcc0000 enabled!"):format(ourName, conflictingAddonName))
 				end 
+				return
 			end 
-		elseif (self:DependencyFailed()) then
-			return
 		end
 
 		local event, arg1 = ...
@@ -261,12 +260,17 @@ local ModuleProtoType = {
 	end,
 
 	Enable = function(self, ...)
-		if (self:IsIncompatible() or self:DependencyFailed()) then
+		if (self:IsUserDisabled()) or (self:DependencyFailed()) or (self:IsIncompatible()) then
 			return
 		end
 		if (not enabledModules[self]) then 
 			if (not initializedModules[self]) then 
 				self:Init("Forced")
+
+				-- The module could've been disabled during its init phase.
+				if (self:IsUserDisabled()) then
+					return
+				end
 			end
 			enabledModules[self] = true
 
@@ -296,7 +300,7 @@ local ModuleProtoType = {
 			-- Disable any embedded libraries
 			for i = #self.libraries, 1, -1 do
 				local libaryName = table_remove(self.libraries[i])
-				local library = CogWheel(libraryName)
+				local library = Wheel(libraryName)
 				if (library and library.OnDisable) then
 					library:OnDisable(self)
 				end
@@ -304,6 +308,26 @@ local ModuleProtoType = {
 
 			return self.OnDisable and self:OnDisable(...)
 		end
+	end,
+
+	SetUserDisabled = function(self, disable)
+		if (disable) then
+			userDisabledModules[self] = true
+		else
+			userDisabledModules[self] = nil
+		end
+	end,
+
+	IsUserDisabled = function(self)
+		return userDisabledModules[self]
+	end,
+
+	IsEnabled = function(self)
+		return enabledModules[self]
+	end,
+
+	IsInitialized = function(self)
+		return initializedModules[self]
 	end,
 
 	IsIncompatible = function(self)
@@ -316,11 +340,11 @@ local ModuleProtoType = {
 			if (addonName ~= thisAddon) then
 				if (type(condition) == "function") then
 					if LibModule:IsAddOnEnabled(addonName) then
-						return condition(self), addonName
+						return condition(self)
 					end
 				else
 					if LibModule:IsAddOnEnabled(addonName) then
-						return true, addonName
+						return true
 					end
 				end
 			end
@@ -397,6 +421,16 @@ local ModuleProtoType = {
 			end
 			currentArg = currentArg + 1
 			addonDependencies[self][addonName] = condition and condition or true
+		end
+	end,
+
+	GetAddOnDisplayName = function(self, addonName)
+		local target = string_lower(addonName)
+		for i = 1,GetNumAddOns() do
+			local name, title, notes, enabled, loadable, reason, security = self:GetAddOnInfo(i)
+			if string_lower(name) == addonName then
+				return title or name
+			end
 		end
 	end,
 
@@ -564,7 +598,8 @@ local ModuleProtoType = {
 			msg = msg:gsub("/(%w+)", "|cff77aaff/%1|r") 
 
 			-- camelcase or other words suspected to be code references
-			msg = msg:gsub("(%u?)(%l+)(%u)(%l+)", "|cff33ff33%1%2%3%4|r") 
+			msg = msg:gsub("(%u?%l+%u%l+)", "|cff33ff33%1|r") 
+			msg = msg:gsub("|r(%u%l+)", "%1|r") -- expands the coloring for multiple humps
 
 			-- assume bracketed entries are intended to be highlighted
 			msg = msg:gsub("%[(.-)%]", "|cff33ff33%1|r") 
@@ -618,12 +653,12 @@ LibModule.NewModule = function(self, name, ...)
 	check(name, 1, "string")
 
 	-- Don't allow modules to be overwritten
-	if self.modules[name] then
-		return error(("Bad argument #%.0f to '%s': A module named '%s' already exists!"):format(1, "NewModule", name))
+	if (self.modules[name]) then
+		return error(string_format("Bad argument #%.0f to '%s': A module named '%s' already exists!", 1, "NewModule", name))
 	end
 
-	if PRIORITY_HASH[name] then
-		return error(("Bad argument #%.0f to '%s': Illegal module name '%s', pick another!"):format(1, "NewModule", name))
+	if (PRIORITY_HASH[name]) then
+		return error(string_format("Bad argument #%.0f to '%s': Illegal module name '%s', pick another!", 1, "NewModule", name))
 	end
 
 	local module = setmetatable({ modules = {}, moduleLoadPriority = { HIGH = {}, NORMAL = {}, LOW = {}, PLUGIN = {} }, libraries = {} }, module_mt)
@@ -644,7 +679,7 @@ LibModule.NewModule = function(self, name, ...)
 		-- Embed libraries
 		for i = libraryOffset, numArgs do
 			local libraryName = select(i, ...)
-			local library = CogWheel(libraryName)
+			local library = Wheel(libraryName)
 			if (library and library.Embed) then
 				library:Embed(module)
 				table_insert(module.libraries, libraryName)
@@ -685,13 +720,13 @@ LibModule.ForAll = function(self, func, priorityFilter, ...)
 	check(priorityFilter, 2, "string", "nil")
 
 	-- If a valid priority filter is set, only modules of that given priority will be called.
-	if priorityFilter then
+	if (priorityFilter) then
 		if (not PRIORITY_HASH[priorityFilter]) then
-			return error(("Bad argument #%.0f to '%s': The load priority '%s' is invalid! Valid priorities are: %s"):format(2, "ForAll", priorityFilter, table_concat(PRIORITY_INDEX, ", ")))
+			return error(string_format("Bad argument #%.0f to '%s': The load priority '%s' is invalid! Valid priorities are: %s", 2, "ForAll", priorityFilter, table_concat(PRIORITY_INDEX, ", ")))
 		end
 		for name,module in pairs(self.moduleLoadPriority[priorityFilter]) do
 			if (type(func) == "string") then
-				if module[func] then
+				if (module[func]) then
 					module[func](module, ...)
 				end
 			else

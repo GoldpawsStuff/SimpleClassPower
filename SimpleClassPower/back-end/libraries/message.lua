@@ -1,4 +1,4 @@
-local LibMessage = CogWheel:Set("LibMessage", 9)
+local LibMessage = Wheel:Set("LibMessage", 16)
 if (not LibMessage) then	
 	return
 end
@@ -6,8 +6,10 @@ end
 -- Lua API
 local assert = assert
 local debugstack = debugstack
-local error = error 
+local error = error
+local pairs = pairs
 local select = select
+local string_format = string.format
 local string_join = string.join
 local string_match = string.match
 local table_insert = table_insert
@@ -25,13 +27,13 @@ local events = LibMessage.events
 local check = function(value, num, ...)
 	assert(type(num) == "number", ("Bad argument #%.0f to '%s': %s expected, got %s"):format(2, "Check", "number", type(num)))
 	for i = 1,select("#", ...) do
-		if (type(value) == select(i, ...)) then 
+		if type(value) == select(i, ...) then 
 			return 
 		end
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 LibMessage.New = function(self, target, registerName, registerNameAlternate, unregisterName, unregisterAllName, isRegisteredName)
@@ -136,12 +138,17 @@ LibMessage.New = function(self, target, registerName, registerNameAlternate, unr
 		check(message, 1, "string")
 		check(func, 2, "string", "function", "nil")
 
+		local silent = ...
 		local messages = events[message] and events[message][self]
 		if (not messages) then
-			if (not events[message]) then
-				return error(("The message '%s' isn't currently registered to any object."):format(message))
+			if (silent == true) then
+				return
 			else
-				return error(("The message '%s' isn't currently registered to the object '%s'."):format(message, tostring(self)))
+				if (not events[message]) then
+					return error(("The message '%s' isn't currently registered to any object."):format(message))
+				else
+					return error(("The message '%s' isn't currently registered to the object '%s'."):format(message, tostring(self)))
+				end
 			end
 		end
 
@@ -155,6 +162,11 @@ LibMessage.New = function(self, target, registerName, registerNameAlternate, unr
 				-- Fire the Unregister callback if no more occurrences of this message is registered
 				return (target.OnUnregister and (not next(events[message]))) and target:OnUnregister(message, ...)
 			end
+		end
+
+		-- Obey the silent flag!
+		if (silent == true) then
+			return
 		end
 
 		-- If we reach this point it means nothing to unregister was found
@@ -181,7 +193,6 @@ LibMessage.New = function(self, target, registerName, registerNameAlternate, unr
 
 			for i = #messages, 1, -1 do
 				table_remove(messages, i)
-				--messages[i] = nil
 			end
 
 			-- Fire the Unregister callback if something was actually unregistered
@@ -285,26 +296,35 @@ LibMessage.RegisterMessage = function(self, message, func, ...)
 	events[message][self][#events[message][self] + 1] = func
 end
 
-LibMessage.UnregisterMessage = function(self, message, func)
+LibMessage.UnregisterMessage = function(self, message, func, ...)
 	check(message, 1, "string")
 	check(func, 2, "string", "function", "nil")
 
 	local messages = events[message] and events[message][self]
 	if (not messages) then
-		if (not events[message]) then
-			return error(("The message '%s' isn't currently registered to any object."):format(message))
+		local silent = ...
+		if (silent == true) then
+			return
 		else
-			return error(("The message '%s' isn't currently registered to the object '%s'."):format(message, tostring(self)))
+			if (not events[message]) then
+				return error(("The message '%s' isn't currently registered to any object."):format(message))
+			else
+				return error(("The message '%s' isn't currently registered to the object '%s'."):format(message, tostring(self)))
+			end
 		end
 	end
 
 	func = func or message
 
+	local found
 	for i = #messages, 1, -1 do
 		if (messages[i] == func) then 
+			found = true
 			table_remove(messages, i)
-			--messages[i] = nil
 		end
+	end
+	if (found) then 
+		return 
 	end
 
 	-- If we reach this point it means nothing to unregister was found
@@ -319,21 +339,18 @@ LibMessage.UnregisterMessage = function(self, message, func)
 	end
 end
 
-LibMessage.UnregisterAllMessages = function(self, message, ...)
-	check(message, 1, "string")
-
-	local messages = events[message] and events[message][self]
-
-	-- Silently fail if nothing is registered. 
-	-- We don't want errors on this one as I sometimes need to 
-	-- use this method as a precaution when upgrading libraries.
-	if (not messages) or (#messages == 0) then
-		return
-	end
-
-	for i = #messages, 1, -1 do
-		table_remove(messages, i)
-		--messages[i] = nil
+LibMessage.UnregisterAllMessages = function(self)
+	for message in pairs(events) do
+		local messages = events[message][self]
+		-- Silently fail if nothing is registered. 
+		-- We don't want errors on this one as I sometimes need to 
+		-- use this method as a precaution when upgrading libraries.
+		if (not messages) or (#messages == 0) then
+			return
+		end
+		for i = #messages, 1, -1 do
+			table_remove(messages, i)
+		end
 	end
 end
 

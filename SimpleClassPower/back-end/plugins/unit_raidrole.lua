@@ -5,7 +5,6 @@ local _G = _G
 -- WoW API
 local GetLootMethod = _G.GetLootMethod
 local GetPartyAssignment = _G.GetPartyAssignment
-local UnitHasVehicleUI = _G.UnitHasVehicleUI
 local UnitInParty = _G.UnitInParty
 local UnitInRaid = _G.UnitInRaid
 local UnitIsGroupAssistant = _G.UnitIsGroupAssistant
@@ -48,7 +47,7 @@ local Update = function(self, event, unit)
 					role = "MASTERLOOTER"
 				end
 			end
-			if (not role) and (UnitInRaid(unit) and (not UnitHasVehicleUI(unit))) then
+			if (not role) and (UnitInRaid(unit)) then
 				if (GetPartyAssignment("MAINTANK", unit)) then
 					role = "MAINTANK"
 				elseif (GetPartyAssignment("MAINASSIST", unit)) then
@@ -104,12 +103,7 @@ local Enable = function(self)
 		self:RegisterEvent("PARTY_LEADER_CHANGED", Proxy, true)
 		self:RegisterEvent("PARTY_LOOT_METHOD_CHANGED", Proxy, true)
 		self:RegisterEvent("RAID_TARGET_UPDATE", Proxy, true)
-
-		-- Avoid duplicate events, library fires this for all elements on raid/party
-		if (not self.unit:match("^party(%d+)")) and (not self.unit:match("^raid(%d+)")) then 
-			self:RegisterEvent("GROUP_ROSTER_UPDATE", Proxy, true)
-		end 
-
+		self:RegisterEvent("GROUP_ROSTER_UPDATE", Proxy, true)
 
 		return true
 	end
@@ -126,6 +120,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("RaidRole", Enable, Disable, Proxy, 8)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("RaidRole", Enable, Disable, Proxy, 11)
 end 

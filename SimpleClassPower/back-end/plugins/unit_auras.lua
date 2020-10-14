@@ -1,7 +1,7 @@
-local LibFrame = CogWheel("LibFrame")
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "UnitAuras requires LibFrame to be loaded.")
 
-local LibAura = CogWheel("LibAura")
+local LibAura = Wheel("LibAura")
 assert(LibAura, "UnitAuras requires LibAura to be loaded.")
 
 -- Lua API
@@ -10,21 +10,24 @@ local math_ceil = math.ceil
 local math_floor = math.floor
 local table_insert = table.insert
 local table_remove = table.remove
+local table_sort = table.sort
 local table_wipe = table.wipe
 
 -- WoW API
-local CancelUnitBuff = _G.CancelUnitBuff
-local GetTime = _G.GetTime
-local InCombatLockdown = _G.InCombatLockdown
-local UnitBuff = _G.UnitBuff
-local UnitDebuff = _G.UnitDebuff
-local UnitExists = _G.UnitExists
-local UnitHasVehicleUI = _G.UnitHasVehicleUI
+local CancelUnitBuff = CancelUnitBuff
+local GetTime = GetTime
+local InCombatLockdown = InCombatLockdown
+local UnitExists = UnitExists
+local UnitHasVehicleUI = UnitHasVehicleUI
 
 -- Blizzard Textures
 local EDGE_LOC_TEXTURE = [[Interface\Cooldown\edge-LoC]]
 local EDGE_NORMAL_TEXTURE = [[Interface\Cooldown\edge]]
 local BLING_TEXTURE = [[Interface\Cooldown\star4]]
+
+-- Sourced from FrameXML/BuffFrame.lua
+local BUFF_MAX_DISPLAY = BUFF_MAX_DISPLAY
+local DEBUFF_MAX_DISPLAY = DEBUFF_MAX_DISPLAY
 
 -- Aura Cache
 local Cache = {}
@@ -56,9 +59,6 @@ end
 
 -- Aura Button Template
 -----------------------------------------------------
-local Aura = LibFrame:CreateFrame("Button")
-local Aura_MT = { __index = Aura }
-
 local Aura_OnClick = function(button, buttonPressed, down)
 	if button.OnClick then 
 		return button:OnClick(buttonPressed, down)
@@ -89,6 +89,7 @@ local Aura_UpdateTooltip = function(button)
 	local tooltip = button:GetTooltip()
 	tooltip:Hide()
 	tooltip:SetMinimumWidth(160)
+	tooltip.hideSpellID = button.isFiltered
 	local element = button._owner
 	if element.tooltipDefaultPosition then 
 		tooltip:SetDefaultAnchor(button)
@@ -200,9 +201,13 @@ end
 
 local CreateAuraButton = function(element)
 
-	local button = setmetatable(element:CreateFrame("Button"), Aura_MT)
-	button:EnableMouse(not element.disableMouse)
-	button:RegisterForClicks("RightButtonUp")
+	local button = element:CreateFrame("Button")
+	if (not element.disableMouse) then
+		button:EnableMouse(true)
+		button:RegisterForClicks("RightButtonUp")
+	else
+		button:EnableMouse(false)
+	end
 	button:SetSize(element.auraSize, element.auraSize)
 	button._owner = element
 
@@ -214,13 +219,13 @@ local CreateAuraButton = function(element)
 
 	-- Frame to contain art overlays, texts, etc
 	-- Modules can put their borders and other overlays here
-	local overlay = button:CreateFrame("Frame", nil, button)
+	local overlay = button:CreateFrame("Frame")
 	overlay:SetAllPoints(button)
 	overlay:SetFrameLevel(button:GetFrameLevel() + 2)
 	button.Overlay = overlay
 
 	-- Cooldown frame
-	local cooldown = button:CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+	local cooldown = button:CreateFrame("Cooldown", nil, "CooldownFrameTemplate")
 	cooldown:Hide()
 	cooldown:SetAllPoints(button)
 	cooldown:SetFrameLevel(button:GetFrameLevel() + 1)
@@ -282,7 +287,7 @@ local CreateAuraButton = function(element)
 	return button
 end 
 
-local SetAuraButtonPosition = function(element, button, order)
+local SetAuraButtonPosition = function(element, button, buttonNum)
 
 	-- Get the accurate size of the container
 	local elementW, elementH = element:GetSize()
@@ -302,7 +307,7 @@ local SetAuraButtonPosition = function(element, button, order)
 	numRows = numRows - numRows%1
 
 	-- No room for this aura, return in panic!
-	if (order > numCols*numRows) then 
+	if (buttonNum > numCols*numRows) then 
 		return true
 	end 
 
@@ -310,9 +315,9 @@ local SetAuraButtonPosition = function(element, button, order)
 	local point = ((element.growthY == "UP") and "BOTTOM" or (element.growthY == "DOWN") and "TOP") .. ((element.growthX == "RIGHT") and "LEFT" or (element.growthX == "LEFT") and "RIGHT")
 
 	-- Figure out the positions in the grid
-	order = order - 1 
-	local posX = order%numCols
-	local posY = order/numCols - order/numCols%1
+	buttonNum = buttonNum - 1 
+	local posX = buttonNum%numCols
+	local posY = buttonNum/numCols - buttonNum/numCols%1
 
 	-- Figure out where to grow
 	local offsetX = posX * width * (element.growthX == "LEFT" and -1 or 1)
@@ -323,9 +328,26 @@ local SetAuraButtonPosition = function(element, button, order)
 	button:SetPoint(point, offsetX, offsetY)
 end 
 
+-- Let's keep the sorting as simplistic as possible.
+local auraSortFunction = function(a,b)
+	if (a) and (b) then
+		if (a.isCastByPlayer == b.isCastByPlayer) then
+			if (a.expirationTime == b.expirationTime) then
+				if (a.name) and (b.name) then
+					return (a.name > b.name)
+				end
+			else
+				return (a.expirationTime > b.expirationTime)
+			end
+		else
+			return a.isCastByPlayer
+		end 
+	end
+end
+
 local IterateBuffs = function(element, unit, filter, customFilter, visible)
-	local visibleBuffs = 0
-	local visible = visible or 0
+	local visibleBuffs = 0 -- total number of visible buffs
+	local visible = visible or 0 -- total number of visible auras so far
 
 	-- Iterate helpful auras
 	for i = 1, BUFF_MAX_DISPLAY do 
@@ -339,18 +361,19 @@ local IterateBuffs = function(element, unit, filter, customFilter, visible)
 		end
 
 		-- Figure out if the debuff is owned by us, not just cast by us
-		local isOwnedByPlayer = (unitCaster and (unitCaster == "player" or unitCaster == "pet" or (UnitHasVehicleUI and UnitHasVehicleUI("player") and unitCaster == "vehicle")))
+		local isOwnedByPlayer = unitCaster and (unitCaster == "player" or unitCaster == "pet")
 
 		-- Run the custom filter method, if it exists
-		local auraPriority
+		local auraPriority, isFiltered
 		if customFilter then 
-			local displayAura, displayPriority = customFilter(element, true, unit, isOwnedByPlayer, name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3)
+			local displayAura, displayPriority, filtered = customFilter(element, true, unit, isOwnedByPlayer, name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3)
 
 			if displayAura then 
 				auraPriority = displayPriority
 			else 
 				name = nil
 			end 
+			isFiltered = filtered
 		end 
 		
 		if name then 
@@ -392,6 +415,7 @@ local IterateBuffs = function(element, unit, filter, customFilter, visible)
 			button.isCastByPlayer = isCastByPlayer
 			button.isOwnedByPlayer = isOwnedByPlayer
 			button.auraPriority = auraPriority
+			button.isFiltered = isFiltered
 
 			-- Update the icon texture
 			button.Icon:SetTexture(icon)
@@ -401,11 +425,6 @@ local IterateBuffs = function(element, unit, filter, customFilter, visible)
 
 			-- Update timers
 			Aura_SetTimer(button, duration, expirationTime)
-
-			-- Position the button
-			if SetAuraButtonPosition(element, button, visible) then 
-				break
-			end 
 
 			-- Run module post updates
 			if element.PostUpdateButton then
@@ -418,16 +437,41 @@ local IterateBuffs = function(element, unit, filter, customFilter, visible)
 			end
 
 		end 
-
 	end 
+
+	local offset = visible - visibleBuffs
+
+	-- Sort them
+	local cache = Cache[element]
+	for i = 1,visibleBuffs do
+		local position = offset + i
+		local index = tostring(position)
+		cache[i] = element[index]
+	end
+	for i = visibleBuffs+1,#cache do
+		cache[i] = nil
+	end
+	table_sort(cache, element.customSort or auraSortFunction)
+
+	-- Position them all
+	for i = 1,visibleBuffs do
+		local position = offset + i
+		local index = tostring(position)
+		local button = cache[i]
+
+		-- Position the button
+		SetAuraButtonPosition(element, button, position)
+	end
 
 	return visible, visibleBuffs
 end
 
 local IterateDebuffs = function(element, unit, filter, customFilter, visible)
 
-	local visibleDebuffs = 0
-	local visible = visible or 0
+	local visibleDebuffs = 0 -- total number of visible debuffs
+	local visible = visible or 0 -- total number of visible auras so far
+	
+	local debuffCache = LibAura:GetUnitDebuffCacheByFilter(unit, filter)
 
 	-- Iterate harmful auras
 	for i = 1, DEBUFF_MAX_DISPLAY do
@@ -441,18 +485,19 @@ local IterateDebuffs = function(element, unit, filter, customFilter, visible)
 		end
 
 		-- Figure out if the debuff is owned by us, not just cast by us
-		local isOwnedByPlayer = (unitCaster and (unitCaster == "player" or unitCaster == "pet" or (UnitHasVehicleUI and UnitHasVehicleUI("player") and unitCaster == "vehicle")))
+		local isOwnedByPlayer = unitCaster and (unitCaster == "player" or unitCaster == "pet")
 
 		-- Run the custom filter method, if it exists
-		local auraPriority
+		local auraPriority, isFiltered
 		if customFilter then 
-			local displayAura, displayPriority = customFilter(element, false, unit, isOwnedByPlayer, name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3) 
+			local displayAura, displayPriority, filtered = customFilter(element, false, unit, isOwnedByPlayer, name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3) 
 			
 			if displayAura then 
 				auraPriority = displayPriority
 			else 
 				name = nil
 			end 
+			isFiltered = filtered
 		end 
 
 		if name then 
@@ -495,6 +540,7 @@ local IterateDebuffs = function(element, unit, filter, customFilter, visible)
 			button.isCastByPlayer = isCastByPlayer
 			button.isOwnedByPlayer = isOwnedByPlayer
 			button.auraPriority = auraPriority
+			button.isFiltered = isFiltered
 
 			-- Update the icon texture
 			button.Icon:SetTexture(icon)
@@ -504,11 +550,6 @@ local IterateDebuffs = function(element, unit, filter, customFilter, visible)
 
 			-- Update timers
 			Aura_SetTimer(button, duration, expirationTime)
-
-			-- Position the button
-			if SetAuraButtonPosition(element, button, visible) then 
-				break
-			end 
 
 			-- Run module post updates
 			if element.PostUpdateButton then
@@ -521,6 +562,31 @@ local IterateDebuffs = function(element, unit, filter, customFilter, visible)
 			end
 		end 
 	end 
+
+	local offset = visible - visibleDebuffs
+
+	-- Sort them
+	local cache = Cache[element]
+	for i = 1,visibleDebuffs do
+		local position = offset + i
+		local index = tostring(position)
+		cache[i] = element[index]
+	end
+	for i = visibleDebuffs+1,#cache do
+		cache[i] = nil
+	end
+	table_sort(cache, element.customSort or auraSortFunction)
+
+	-- Position them all
+	for i = 1,visibleDebuffs do
+		local position = offset + i
+		local index = tostring(position)
+		local button = cache[i]
+
+		-- Position the button
+		SetAuraButtonPosition(element, button, position)
+	end
+	
 	return visible, visibleDebuffs
 end 
 
@@ -549,16 +615,6 @@ local EvaluateVisibilities = function(element, visible)
 	end 
 end
 
-local EvaluateFilters = function(element, ...)
-	local numFilters = select("#", ...)
-	for i = 1,numFilters do 
-		
-	end 
-end
-
-local UpdateElement = function(self, event, unit)
-end
-
 local Update = function(self, event, unit, ...)
 	if (not unit) or (unit ~= self.unit) then 
 		return 
@@ -580,8 +636,8 @@ local Update = function(self, event, unit, ...)
 			Auras:PreUpdate(unit)
 		end
 
-		-- Store some basic values on the health element
-		local forced = forced or guid ~= Auras.guid
+		-- Store some basic values on the element
+		local forced = forced or (guid ~= Auras.guid) or (not Auras.guid)
 		Auras.guid = guid
 	
 		-- Filter strings
@@ -599,14 +655,21 @@ local Update = function(self, event, unit, ...)
 			LibAura:CacheUnitDebuffsByFilter(unit, debuffFilter)
 		end 
 
-		local visible = 0
+		local visible, visibleBuffs, visibleDebuffs = 0, 0, 0
 		if Auras.debuffsFirst then 
-			visible = IterateDebuffs(Auras, unit, debuffFilter, debuffFilterFunc, visible) 
-			visible = IterateBuffs(Auras, unit, buffFilter, buffFilterFunc, visible)
+			visible, visibleDebuffs = IterateDebuffs(Auras, unit, debuffFilter, debuffFilterFunc, visible) 
+			visible, visibleBuffs = IterateBuffs(Auras, unit, buffFilter, buffFilterFunc, visible)
 		else 
-			visible = IterateBuffs(Auras, unit, buffFilter, buffFilterFunc, visible)
-			visible = IterateDebuffs(Auras, unit, debuffFilter, debuffFilterFunc, visible)
+			visible, visibleBuffs = IterateBuffs(Auras, unit, buffFilter, buffFilterFunc, visible)
+			visible, visibleDebuffs = IterateDebuffs(Auras, unit, debuffFilter, debuffFilterFunc, visible)
 		end 
+
+		-- Add in meta-info for filters
+		Auras.visibleAuras = visible
+		Auras.visibleBuffs = visibleBuffs
+		Auras.visibleDebuffs = visibleDebuffs
+		Auras.hasBuffs = visibleBuffs > 0
+		Auras.hasDebuffs = visibleDebuffs > 0
 
 		EvaluateVisibilities(Auras, visible)
 
@@ -620,23 +683,31 @@ local Update = function(self, event, unit, ...)
 			Buffs:PreUpdate(unit)
 		end
 
-		-- Store some basic values on the health element
-		local forced = forced or guid ~= Buffs.guid
+		-- Store some basic values on the element
+		local forced = forced or (guid ~= Buffs.guid) or (not Buffs.guid)
 		Buffs.guid = guid
+
+		-- Filter strings
+		local buffFilter = Buffs.filter or Buffs.filterBuffs 
 		
-		local buffFilter = Buffs.buffFilterString or Buffs.auraFilterString or Buffs.filter
-		local buffFilterFunc = Buffs.buffFilterFunc or Buffs.auraFilterFunc
+		-- Filter functions
+		local buffFilterFunc = Buffs.func or Buffs.funcBuffs 
 
-		local debuffFilter = Buffs.debuffFilterString or Buffs.auraFilterString or Buffs.filter
-		local debuffFilterFunc = Buffs.debuffFilterFunc or Buffs.auraFilterFunc
-
-		-- Forcefully register aura watches for the relevant filters
+		-- Forcefully register cache the auras for the relevant filters
 		-- This is to ensure force updates actually have the right filters and fully updated caches
 		if forced then 
 			LibAura:CacheUnitBuffsByFilter(unit, buffFilter)
 		end 
-		
-		local visible = IterateBuffs(Buffs, unit, buffFilter, buffFilterFunc)
+
+		local visible, visibleBuffs, visibleDebuffs = 0, 0, 0
+		visible, visibleBuffs = IterateBuffs(Buffs, unit, buffFilter, buffFilterFunc, visible)
+
+		-- Add in meta-info for filters
+		Buffs.visibleAuras = visible
+		Buffs.visibleBuffs = visibleBuffs
+		Buffs.visibleDebuffs = visibleDebuffs
+		Buffs.hasBuffs = visibleBuffs > 0
+		Buffs.hasDebuffs = visibleDebuffs > 0
 
 		EvaluateVisibilities(Buffs, visible)
 
@@ -650,20 +721,31 @@ local Update = function(self, event, unit, ...)
 			Debuffs:PreUpdate(unit)
 		end
 
-		-- Store some basic values on the health element
-		local forced = forced or guid ~= Debuffs.guid
+		-- Store some basic values on the element
+		local forced = forced or (guid ~= Debuffs.guid) or (not Debuffs.guid)
 		Debuffs.guid = guid
 		
-		local debuffFilter = Debuffs.debuffFilterString or Debuffs.auraFilterString or Debuffs.filter
-		local debuffFilterFunc = Debuffs.debuffFilterFunc or Debuffs.auraFilterFunc
+		-- Filter strings
+		local debuffFilter = Debuffs.filter or Debuffs.filterDebuffs
+		
+		-- Filter functions
+		local debuffFilterFunc = Debuffs.func or Debuffs.funcDebuffs
 
-		-- Forcefully register aura watches for the relevant filters
+		-- Forcefully register cache the auras for the relevant filters
 		-- This is to ensure force updates actually have the right filters and fully updated caches
 		if forced then 
 			LibAura:CacheUnitDebuffsByFilter(unit, debuffFilter)
 		end 
 
-		local visible = IterateDebuffs(Debuffs, unit, debuffFilter, debuffFilterFunc)
+		local visible, visibleBuffs, visibleDebuffs = 0, 0, 0
+		visible, visibleDebuffs = IterateDebuffs(Debuffs, unit, debuffFilter, debuffFilterFunc, visible)
+
+		-- Add in meta-info for filters
+		Debuffs.visibleAuras = visible
+		Debuffs.visibleBuffs = visibleBuffs
+		Debuffs.visibleDebuffs = visibleDebuffs
+		Debuffs.hasBuffs = visibleBuffs > 0
+		Debuffs.hasDebuffs = visibleDebuffs > 0
 
 		EvaluateVisibilities(Debuffs, visible)
 
@@ -690,19 +772,21 @@ local Enable = function(self)
 	if (Auras or Buffs or Debuffs) then
 		local unit = self.unit
 
-		if Auras then
+		if (Auras) then
 			Auras._owner = self
 			Auras.unit = unit
 			Auras.ForceUpdate = ForceUpdate
 			Cache[Auras] = Cache[Auras] or {}
 		end
-		if Buffs then
+
+		if (Buffs) then
 			Buffs._owner = self
 			Buffs.unit = unit
 			Buffs.ForceUpdate = ForceUpdate
 			Cache[Buffs] = Cache[Buffs] or {}
 		end
-		if Debuffs then
+		
+		if (Debuffs) then
 			Debuffs._owner = self
 			Debuffs.unit = unit
 			Debuffs.ForceUpdate = ForceUpdate
@@ -710,23 +794,27 @@ local Enable = function(self)
 		end
 
 		local frequent = (Auras and Auras.frequent) or (Buffs and Buffs.frequent) or (Debuffs and Debuffs.frequent)
-		if frequent then
+		if (frequent) then
 			self:EnableFrequentUpdates("Auras", frequent)
 		else
-			self:RegisterMessage("CG_UNIT_AURA", Proxy)
+			self:RegisterMessage("GP_UNIT_AURA", Proxy)
 			self:RegisterEvent("PLAYER_ENTERING_WORLD", Proxy, true)
 			self:RegisterEvent("PLAYER_REGEN_DISABLED", Proxy, true)
 			self:RegisterEvent("PLAYER_REGEN_ENABLED", Proxy, true)
-			self:RegisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
-			self:RegisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
-			self:RegisterEvent("UNIT_EXITING_VEHICLE", Proxy)
-			self:RegisterEvent("UNIT_EXITED_VEHICLE", Proxy)
-			self:RegisterEvent("VEHICLE_UPDATE", Proxy, true)
+
+			if (IsRetail) then
+				self:RegisterEvent("UNIT_ENTERED_VEHICLE", Proxy)
+				self:RegisterEvent("UNIT_ENTERING_VEHICLE", Proxy)
+				self:RegisterEvent("UNIT_EXITING_VEHICLE", Proxy)
+				self:RegisterEvent("UNIT_EXITED_VEHICLE", Proxy)
+				self:RegisterEvent("VEHICLE_UPDATE", Proxy, true)
+			end
 
 			if (unit == "target") or (unit == "targettarget") then
 				self:RegisterEvent("PLAYER_TARGET_CHANGED", Proxy, true)
 			end
 		end
+
 		return true
 	end
 end 
@@ -736,34 +824,34 @@ local Disable = function(self)
 	local Buffs = self.Buffs
 	local Debuffs = self.Debuffs
 
-	if Auras or Buffs or Debuffs then
+	if (Auras or Buffs or Debuffs) then
 	
-		if Auras then
+		if (Auras) then
 			Auras.unit = nil
 			Auras:Hide()
-			if Cache[Auras] then 
+			if (Cache[Auras]) then 
 				table_wipe(Cache[Auras])
 			end
 		end
 	
-		if Buffs then
+		if (Buffs) then
 			Buffs.unit = nil
 			Buffs:Hide()
-			if Cache[Buffs] then 
+			if (Cache[Buffs]) then 
 				table_wipe(Cache[Buffs])
 			end
 		end
 	
-		if Debuffs then
+		if (Debuffs) then
 			Debuffs.unit = nil
 			Debuffs:Hide()
-			if Cache[Debuffs] then 
+			if (Cache[Debuffs]) then 
 				table_wipe(Cache[Debuffs])
 			end
 		end
 	
 		if not ((Auras and Auras.frequent) or (Buffs and Buffs.frequent) or (Debuffs and Debuffs.frequent)) then
-			self:UnregisterMessage("CG_UNIT_AURA", Proxy)
+			self:UnregisterMessage("GP_UNIT_AURA", Proxy)
 			self:UnregisterEvent("PLAYER_ENTERING_WORLD", Proxy)
 			self:UnregisterEvent("PLAYER_REGEN_DISABLED", Proxy)
 			self:UnregisterEvent("PLAYER_REGEN_ENABLED", Proxy)
@@ -781,6 +869,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Auras", Enable, Disable, Proxy, 45)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("Auras", Enable, Disable, Proxy, 57)
 end 

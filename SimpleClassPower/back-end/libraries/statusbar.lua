@@ -1,27 +1,28 @@
-local LibStatusBar = CogWheel:Set("LibStatusBar", 51)
-if (not LibStatusBar) then	
+local LibStatusBar = Wheel:Set("LibStatusBar", 56)
+if (not LibStatusBar) then
 	return
 end
 
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "LibStatusBar requires LibClientBuild to be loaded.")
-
-local LibFrame = CogWheel("LibFrame")
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "LibStatusBar requires LibFrame to be loaded.")
 
 LibFrame:Embed(LibStatusBar)
-LibClientBuild:Embed(LibStatusBar)
 
 -- Lua API
 local _G = _G
 local assert = assert
+local debugstack = debugstack
 local error = error
 local ipairs = ipairs
 local math_abs = math.abs
+local math_floor = math.floor
 local math_max = math.max
 local pairs = pairs
 local select = select
 local setmetatable = setmetatable
+local string_format = string.format
+local string_join = string.join
+local string_match = string.match
 local tonumber = tonumber
 local type = type
 
@@ -38,7 +39,7 @@ LibStatusBar.embeds = LibStatusBar.embeds or {}
 local Bars = LibStatusBar.bars
 local Textures = LibStatusBar.textures
 
--- Syntax check 
+-- Syntax check
 local check = function(value, num, ...)
 	assert(type(num) == "number", ("Bad argument #%.0f to '%s': %s expected, got %s"):format(2, "Check", "number", type(num)))
 	for i = 1,select("#", ...) do
@@ -48,7 +49,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 ----------------------------------------------------------------
@@ -58,7 +59,7 @@ local StatusBar = LibStatusBar:CreateFrame("Frame")
 local StatusBar_MT = { __index = StatusBar }
 
 -- Need to borrow some methods here
-local Texture = StatusBar:CreateTexture() 
+local Texture = StatusBar:CreateTexture()
 local Texture_MT = { __index = Texture }
 
 -- Grab some of the original methods before we change them
@@ -66,7 +67,7 @@ local blizzardSetTexCoord = getmetatable(Texture).__index.SetTexCoord
 local blizzardGetTexCoord = getmetatable(Texture).__index.GetTexCoord
 
 -- Mad scientist stuff.
--- What we basically do is to apply texcoords to texcoords, 
+-- What we basically do is to apply texcoords to texcoords,
 -- to get an inner fraction of the already cropped texture. Awesome! :)
 local SetTexCoord = function(self, ...)
 
@@ -94,27 +95,21 @@ local SetTexCoord = function(self, ...)
 
 	-- Allow modules to hook into this
 	local onTexCoordChanged = Bars[self].OnTexCoordChanged
-	if onTexCoordChanged then 
+	if onTexCoordChanged then
 		onTexCoordChanged(self, displayedLeft, displayedRight, displayedTop, displayedBottom)
 	end
-end 
+end
 
 local Update = function(self, elapsed)
 	local data = Bars[self]
 
 	local value = data.disableSmoothing and data.barValue or data.barDisplayValue
 	local min, max = data.barMin, data.barMax
+	local width, height = data.scaffold:GetSize()
 	local orientation = data.barOrientation
-	local width, height = data.statusbar:GetSize() 
 	local bar = data.bar
 	local spark = data.spark
 
-	local skipPost
-	if (elapsed == true) then 
-		elapsed = nil 
-		skipPost = true
-	end 
-	
 	if (value > max) then
 		value = max
 	elseif (value < min) then
@@ -125,33 +120,38 @@ local Update = function(self, elapsed)
 		bar:Hide()
 	else
 
+		-- Ok, here's the problem:
+		-- Textures sizes can't be displayed accurately as fractions of a pixel.
+		-- This causes the bar to "wobbble" when attempting to size it
+		-- according to its much more accurate tex coords.
+		-- Only solid workaround is to keep the textures at integer values,
+		-- And fake the movement by moving the blurry spark at subpixels instead.
 		local displaySize, mult
-		if (max > min) then
+		if (value > min) then
 			mult = (value-min)/(max-min)
-			displaySize = mult * ((orientation == "RIGHT" or orientation == "LEFT") and width or height)
-			if (displaySize < .01) then 
+			local fullSize = (orientation == "RIGHT" or orientation == "LEFT") and width or height
+			displaySize = math_floor(mult * fullSize)
+			if (displaySize < .01) then
 				displaySize = .01
-			end 
+			end
+			mult = displaySize/fullSize
 		else
 			mult = .01
 			displaySize = .01
 		end
 
 		-- if there's a sparkmap, let's apply it!
-		local sparkPoint, sparkAnchor
 		local sparkBefore, sparkAfter = 0,0
 		local sparkMap = data.sparkMap
-		if sparkMap then 
-
+		if sparkMap then
 			local sparkPercentage = mult
-			if data.reversedH and ((orientation == "LEFT") or (orientation == "RIGHT")) then 
+			if data.reversedH and ((orientation == "LEFT") or (orientation == "RIGHT")) then
 				sparkPercentage = 1 - mult
-			end 
-			if data.reversedV and ((orientation == "UP") or (orientation == "DOWN")) then 
+			end
+			if data.reversedV and ((orientation == "UP") or (orientation == "DOWN")) then
 				sparkPercentage = 1 - mult
-			end 
-
-			if (sparkMap.top and sparkMap.bottom) then 
+			end
+			if (sparkMap.top and sparkMap.bottom) then
 
 				-- Iterate through the map to figure out what points we are between
 				-- *There's gotta be a more elegant way to do this...
@@ -159,27 +159,27 @@ local Update = function(self, elapsed)
 				local bottomBefore, bottomAfter = 1, #sparkMap.bottom
 					
 				-- Iterate backwards to find the first top point before our current bar value
-				for i = topAfter,topBefore,-1 do 
-					if sparkMap.top[i].keyPercent > sparkPercentage then 
+				for i = topAfter,topBefore,-1 do
+					if sparkMap.top[i].keyPercent > sparkPercentage then
 						topAfter = i
-					end 
-					if sparkMap.top[i].keyPercent < sparkPercentage then 
+					end
+					if sparkMap.top[i].keyPercent < sparkPercentage then
 						topBefore = i
 						break
-					end 
-				end 
+					end
+				end
 				-- Iterate backwards to find the first bottom point before our current bar value
-				for i = bottomAfter,bottomBefore,-1 do 
-					if sparkMap.bottom[i].keyPercent > sparkPercentage then 
+				for i = bottomAfter,bottomBefore,-1 do
+					if sparkMap.bottom[i].keyPercent > sparkPercentage then
 						bottomAfter = i
-					end 
-					if sparkMap.bottom[i].keyPercent < sparkPercentage then 
+					end
+					if sparkMap.bottom[i].keyPercent < sparkPercentage then
 						bottomBefore = i
 						break
-					end 
-				end 
+					end
+				end
 			
-				-- figure out the offset at our current position 
+				-- figure out the offset at our current position
 				-- between our upper and lover points
 				local belowPercentTop = sparkMap.top[topBefore].keyPercent
 				local abovePercentTop = sparkMap.top[topAfter].keyPercent
@@ -196,22 +196,21 @@ local Update = function(self, elapsed)
 	
 				sparkBefore = (sparkMap.top[topBefore].offset + diffTop*currentPercentTop) --* height
 				sparkAfter = (sparkMap.bottom[bottomBefore].offset + diffBottom*currentPercentBottom) --* height
-	
-			else 
+			else
 				-- iterate through the map to figure out what points we are between
 				-- gotta be a more elegant way to do this
 				local below, above = 1,#sparkMap
-				for i = above,below,-1 do 
-					if sparkMap[i].keyPercent > sparkPercentage then 
+				for i = above,below,-1 do
+					if sparkMap[i].keyPercent > sparkPercentage then
 						above = i
-					end 
-					if sparkMap[i].keyPercent < sparkPercentage then 
+					end
+					if sparkMap[i].keyPercent < sparkPercentage then
 						below = i
 						break
-					end 
-				end 
+					end
+				end
 
-				-- figure out the offset at our current position 
+				-- figure out the offset at our current position
 				-- between our upper and lover points
 				local belowPercent = sparkMap[below].keyPercent
 				local abovePercent = sparkMap[above].keyPercent
@@ -223,45 +222,43 @@ local Update = function(self, elapsed)
 
 				sparkBefore = (sparkMap[below].topOffset + diffTop*currentPercent) --* height
 				sparkAfter = (sparkMap[below].bottomOffset + diffBottom*currentPercent) --* height
-			end 
-		end 
+			end
+		end
 		
-		if (orientation == "RIGHT") then 
-
+		if (orientation == "RIGHT") then
 			if data.reversedH then
 				-- bar grows from the left to right
-				-- and the bar is also flipped horizontally 
+				-- and the bar is also flipped horizontally
 				-- (e.g. target absorbbar)
-				SetTexCoord(bar, 1, 1-mult, 0, 1) 
-			else 
+				SetTexCoord(bar, 1, 1-mult, 0, 1)
+			else
 				-- bar grows from the left to right
 				-- (e.g. player healthbar)
-				SetTexCoord(bar, 0, mult, 0, 1) 
-			end 
-	
+				SetTexCoord(bar, 0, mult, 0, 1)
+			end
+
 			bar:ClearAllPoints()
 			bar:SetPoint("TOP")
 			bar:SetPoint("BOTTOM")
 			bar:SetPoint("LEFT")
 			bar:SetSize(displaySize, height)
-			
+				
 			spark:ClearAllPoints()
 			spark:SetPoint("TOP", bar, "TOPRIGHT", 0, sparkBefore*height)
 			spark:SetPoint("BOTTOM", bar, "BOTTOMRIGHT", 0, -sparkAfter*height)
 			spark:SetSize(data.sparkThickness, height - (sparkBefore + sparkAfter)*height)
-	
-		elseif (orientation == "LEFT") then 
-	
-			if data.reversedH then 
+
+		elseif (orientation == "LEFT") then
+			if data.reversedH then
 				-- bar grows from the right to left
-				-- and the bar is also flipped horizontally 
+				-- and the bar is also flipped horizontally
 				-- (e.g. target healthbar)
-				SetTexCoord(bar, mult, 0, 0, 1) 
-			else 
+				SetTexCoord(bar, mult, 0, 0, 1)
+			else
 				-- bar grows from the right to left
 				-- (e.g. player absorbbar)
 				SetTexCoord(bar, 1-mult, 1, 0, 1)
-			end 
+			end
 	
 			bar:ClearAllPoints()
 			bar:SetPoint("TOP")
@@ -274,14 +271,13 @@ local Update = function(self, elapsed)
 			spark:SetPoint("BOTTOM", bar, "BOTTOMLEFT", 0, -sparkAfter*height)
 			spark:SetSize(data.sparkThickness, height - (sparkBefore + sparkAfter)*height)
 	
-		elseif (orientation == "UP") then 
-	
-			if data.reversed then 
+		elseif (orientation == "UP") then
+			if data.reversed then
 				SetTexCoord(bar, 1, 0, 1-mult, 1)
 				sparkBefore, sparkAfter = sparkAfter, sparkBefore
-			else 
+			else
 				SetTexCoord(bar, 0, 1, 1-mult, 1)
-			end 
+			end
 	
 			bar:ClearAllPoints()
 			bar:SetPoint("LEFT")
@@ -294,14 +290,13 @@ local Update = function(self, elapsed)
 			spark:SetPoint("RIGHT", bar, "TOPRIGHT", sparkAfter*width, 0)
 			spark:SetSize(width - (sparkBefore + sparkAfter)*width, data.sparkThickness)
 	
-		elseif (orientation == "DOWN") then 
-	
-			if data.reversed then 
+		elseif (orientation == "DOWN") then
+			if data.reversed then
 				SetTexCoord(bar, 1, 0, 0, mult)
 				sparkBefore, sparkAfter = sparkAfter, sparkBefore
-			else 
+			else
 				SetTexCoord(bar, 0, 1, 0, mult)
-			end 
+			end
 	
 			bar:ClearAllPoints()
 			bar:SetPoint("LEFT")
@@ -314,7 +309,6 @@ local Update = function(self, elapsed)
 			spark:SetPoint("RIGHT", bar, "BOTTOMRIGHT", sparkAfter*width, 0)
 			spark:SetSize(width - (sparkBefore + sparkAfter*width), data.sparkThickness)
 		end
-
 		if (not bar:IsShown()) then
 			bar:Show()
 		end
@@ -328,7 +322,7 @@ local Update = function(self, elapsed)
 			data.sparkDirection = "IN"
 		end
 	else
-		if elapsed then
+		if (tonumber(elapsed)) then
 			local currentAlpha = spark:GetAlpha()
 			local targetAlpha = data.sparkDirection == "IN" and data.sparkMaxAlpha or data.sparkMinAlpha
 			local range = data.sparkMaxAlpha - data.sparkMinAlpha
@@ -354,16 +348,10 @@ local Update = function(self, elapsed)
 			spark:Show()
 		end
 	end
-
-	-- Allow modules to add their postupdates here
-	--if (self.PostUpdate and (not skipPost)) then 
-	--	self:PostUpdate(value, min, max)
-	--end
-
 end
 
 local smoothingMinValue = .3 -- if a value is lower than this, we won't smoothe
-local smoothingFrequency = .5 -- default duration of smooth transitions 
+local smoothingFrequency = .5 -- default duration of smooth transitions
 local smartSmoothingDownFrequency = .15 -- duration of smooth reductions in smart mode
 local smartSmoothingUpFrequency = .75 -- duration of smooth increases in smart mode
 local smoothingLimit = 1/60 -- max updates per second
@@ -375,28 +363,27 @@ local OnUpdate = function(self, elapsed)
 		return
 	end
 
-	if data.updatesRunning then 
+	if data.updatesRunning then
 		if (data.disableSmoothing) then
 			if (data.barValue <= data.barMin) or (data.barValue >= data.barMax) then
-				--data.scaffold:SetScript("OnUpdate", nil)
 				data.updatesRunning = nil
 			end
 		elseif (data.smoothing) then
-			if (math_abs(data.barDisplayValue - data.barValue) < smoothingMinValue) then 
+			if (math_abs(data.barDisplayValue - data.barValue) < smoothingMinValue) then
 				data.barDisplayValue = data.barValue
 				data.smoothing = nil
-			else 
-				-- The fraction of the total bar this total animation should cover  
-				local animsize = (data.barValue - data.smoothingInitialValue)/(data.barMax - data.barMin) 
+			else
+				-- The fraction of the total bar this total animation should cover 
+				local animsize = (data.barValue - data.smoothingInitialValue)/(data.barMax - data.barMin)
 
 				local smartSpeed
-				if data.useSmartSoothing then 
-					if data.barValue > data.barDisplayValue then 
+				if data.useSmartSoothing then
+					if data.barValue > data.barDisplayValue then
 						smartSpeed = smartSmoothingUpFrequency
-					elseif data.barValue < data.barDisplayValue then 
+					elseif data.barValue < data.barDisplayValue then
 						smartSpeed = smartSmoothingDownFrequency
-					end 
-				end 
+					end
+				end
 
 				local smoothSpeed = smartSpeed or data.smoothingFrequency or smoothingFrequency
 
@@ -404,34 +391,29 @@ local OnUpdate = function(self, elapsed)
 				local pps = (data.barMax - data.barMin)/smoothSpeed
 
 				-- Position in time relative to the length of the animation, scaled from 0 to 1
-				local position = (GetTime() - data.smoothingStart)/smoothSpeed 
-				if (position < 1) then 
+				local position = (GetTime() - data.smoothingStart)/smoothSpeed
+				if (position < 1) then
 					-- The change needed when using average speed
 					local average = pps * animsize * data.elapsed -- can and should be negative
 
 					-- Tha change relative to point in time and distance passed
 					local change = 2*(3 * ( 1 - position )^2 * position) * average*2 --  y = 3 * (1 − t)^2 * t  -- quad bezier fast ascend + slow descend
-					--local change = 2*(3 * ( 1 - position ) * position^2) * average*2 -- y = 3 * (1 − t) * t^2 -- quad bezier slow ascend + fast descend
-					--local change = 2 * average * ((position < .7) and math_abs(position/.7) or math_abs((1-position)/.3)) -- linear slow ascend + fast descend
-					
-					--print(("time: %.3f pos: %.3f change: %.1f"):format(GetTime() - data.smoothingStart, position, change))
 
 					-- If there's room for a change in the intended direction, apply it, otherwise finish the animation
-					if ( (data.barValue > data.barDisplayValue) and (data.barValue > data.barDisplayValue + change) ) 
-					or ( (data.barValue < data.barDisplayValue) and (data.barValue < data.barDisplayValue + change) ) then 
+					if ( (data.barValue > data.barDisplayValue) and (data.barValue > data.barDisplayValue + change) )
+					or ( (data.barValue < data.barDisplayValue) and (data.barValue < data.barDisplayValue + change) ) then
 						data.barDisplayValue = data.barDisplayValue + change
-					else 
+					else
 						data.barDisplayValue = data.barValue
 						data.smoothing = nil
-					end 
-				else 
+					end
+				else
 					data.barDisplayValue = data.barValue
 					data.smoothing = nil
-				end 
-			end 
+				end
+			end
 		else
 			if (data.barDisplayValue <= data.barMin) or (data.barDisplayValue >= data.barMax) or (not data.smoothing) then
-				--data.scaffold:SetScript("OnUpdate", nil)
 				data.updatesRunning = nil
 			end
 		end
@@ -440,9 +422,9 @@ local OnUpdate = function(self, elapsed)
 	end
 
 	-- call module OnUpdate handler
-	if data.OnUpdate then 
+	if data.OnUpdate then
 		data.OnUpdate(data.statusbar, data.elapsed)
-	end 
+	end
 
 	-- only reset this at the very end, as calculations above need it
 	data.elapsed = 0
@@ -463,9 +445,9 @@ StatusBar.SetTexCoord = function(self, ...)
 	local tex = Textures[self]
 	tex[1], tex[2], tex[3], tex[4] = ...
 	Update(self, true)
-	if (self.PostUpdateTexCoord) then 
+	if (self.PostUpdateTexCoord) then
 		self:PostUpdateTexCoord(...)
-	end 
+	end
 end
 
 StatusBar.GetTexCoord = function(self)
@@ -487,16 +469,16 @@ StatusBar.SetSmoothingFrequency = function(self, smoothingFrequency)
 end
 
 StatusBar.SetSmoothingMode = function(self, mode)
-	if (mode == "bezier-fast-in-slow-out")  
-	or (mode == "bezier-slow-in-fast-out")  
-	or (mode == "linear-fast-in-slow-out")  
-	or (mode == "linear-slow-in-fast-out") 
-	or (mode == "linear") then 
+	if (mode == "bezier-fast-in-slow-out") 
+	or (mode == "bezier-slow-in-fast-out") 
+	or (mode == "linear-fast-in-slow-out") 
+	or (mode == "linear-slow-in-fast-out")
+	or (mode == "linear") then
 		Bars[self].barSmoothingMode = mode
-	else 
+	else
 		print(("LibStatusBar: 'SetSmoothingMode(mode)' - Unknown 'mode': %s"):format(mode), 2)
-	end 
-end 
+	end
+end
 
 StatusBar.SetSmartSmoothing = function(self, useSmartSoothing)
 	Bars[self].useSmartSoothing = useSmartSoothing
@@ -515,9 +497,9 @@ StatusBar.SetValue = function(self, value, overrideSmoothing)
 		value = min
 	end
 	data.barValue = value
-	if overrideSmoothing then 
+	if overrideSmoothing then
 		data.barDisplayValue = value
-	end 
+	end
 	if (not data.disableSmoothing) then
 		if (data.barDisplayValue > max) then
 			data.barDisplayValue = max
@@ -535,7 +517,7 @@ StatusBar.SetValue = function(self, value, overrideSmoothing)
 		--if (not data.scaffold:GetScript("OnUpdate")) then
 		--	data.scaffold:SetScript("OnUpdate", OnUpdate)
 		--end
-		return 
+		return
 	end
 	Update(self)
 end
@@ -549,23 +531,23 @@ end
 
 StatusBar.SetMinMaxValues = function(self, min, max, overrideSmoothing)
 	local data = Bars[self]
-	if (data.barMin == min) and (data.barMax == max) then 
-		return 
-	end 
+	if (data.barMin == min) and (data.barMax == max) then
+		return
+	end
 	if (data.barValue > max) then
 		data.barValue = max
 	elseif (data.barValue < min) then
 		data.barValue = min
 	end
-	if overrideSmoothing then 
+	if overrideSmoothing then
 		data.barDisplayValue = data.barValue
-	else 
+	else
 		if (data.barDisplayValue > max) then
 			data.barDisplayValue = max
 		elseif (data.barDisplayValue < min) then
 			data.barDisplayValue = min
 		end
-	end 
+	end
 	data.barMin = min
 	data.barMax = max
 	Update(self)
@@ -583,10 +565,10 @@ StatusBar.SetStatusBarTexture = function(self, ...)
 	else
 		Bars[self].bar:SetTexture(...)
 	end
-	-- Causes a stack overflow if the texture is changed in PostUpdate, 
-	-- as could easily be the case with some bars. 
+	-- Causes a stack overflow if the texture is changed in PostUpdate,
+	-- as could easily be the case with some bars.
 	Update(self, true)
-	if (self.PostUpdateStatusBarTexture) then 
+	if (self.PostUpdateStatusBarTexture) then
 		self:PostUpdateStatusBarTexture(...)
 	end
 end
@@ -618,17 +600,17 @@ StatusBar.SetSparkTexture = function(self, ...)
 	else
 		Bars[self].spark:SetTexture(...)
 	end
-	if (self.PostUpdateSparkTexture) then 
+	if (self.PostUpdateSparkTexture) then
 		self:PostUpdateSparkTexture(...)
-	end 
+	end
 end
 
 StatusBar.SetSparkColor = function(self, ...)
 	Bars[self].spark:SetVertexColor(...)
-	if (self.PostUpdateSparkColor) then 
+	if (self.PostUpdateSparkColor) then
 		self:PostUpdateSparkColor(...)
 	end
-end 
+end
 
 StatusBar.SetSparkMinMaxPercent = function(self, min, max)
 	local data = Bars[self]
@@ -638,14 +620,14 @@ end
 
 StatusBar.SetSparkBlendMode = function(self, blendMode)
 	Bars[self].spark:SetBlendMode(blendMode)
-end 
+end
 
 StatusBar.SetSparkFlash = function(self, durationIn, durationOut, minAlpha, maxAlpha)
 	local data = Bars[self]
 	data.sparkDurationIn = durationIn
 	data.sparkDurationOut = durationOut
 	data.sparkMinAlpha = minAlpha
-	data.sparkMaxAlpha = maxAlpha 
+	data.sparkMaxAlpha = maxAlpha
 	data.sparkDirection = "IN"
 	data.spark:SetAlpha(minAlpha)
 end
@@ -653,16 +635,14 @@ end
 StatusBar.SetOrientation = function(self, orientation)
 	local data = Bars[self]
 	data.barOrientation = orientation
-	if (orientation == "LEFT") or (orientation == "RIGHT") then 
+	if (orientation == "LEFT") or (orientation == "RIGHT") then
 		data.spark:SetTexCoord(0, 1, 3/32, 28/32)
-		--data.spark:SetTexCoord(0, 1, 11/32, 19/32)
-	elseif (orientation == "UP") or (orientation == "DOWN") then 
+	elseif (orientation == "UP") or (orientation == "DOWN") then
 		data.spark:SetTexCoord(1,11/32,0,11/32,1,19/32,0,19/32)
-		--data.spark:SetTexCoord(1,3/32,0,3/32,1,28/32,0,28/32) 
-	end 
-	if (self.PostUpdateOrientation) then 
+	end
+	if (self.PostUpdateOrientation) then
 		self:PostUpdateOrientation(orientation)
-	end 
+	end
 end
 
 StatusBar.CreateFrame = function(self, type, name, ...)
@@ -679,23 +659,23 @@ end
 
 StatusBar.SetScript = function(self, ...)
 	-- can not allow the scaffold to get its scripts overwritten
-	local scriptHandler, func = ... 
-	if (scriptHandler == "OnUpdate") then 
-		Bars[self].OnUpdate = func 
-	elseif (scriptHandler == "OnTexCoordChanged") then 
+	local scriptHandler, func = ...
+	if (scriptHandler == "OnUpdate") then
+		Bars[self].OnUpdate = func
+	elseif (scriptHandler == "OnTexCoordChanged") then
 		Bars[self].OnTexCoordChanged = func
 	else
 		Bars[self].scaffold:SetScript(...)
-	end 
+	end
 end
 
 StatusBar.GetScript = function(self, ...)
-	local scriptHandler, func = ... 
-	if (scriptHandler == "OnUpdate") then 
+	local scriptHandler, func = ...
+	if (scriptHandler == "OnUpdate") then
 		return Bars[self].OnUpdate
-	else 
+	else
 		return Bars[self].scaffold:GetScript(...)
-	end 
+	end
 end
 
 StatusBar.ClearAllPoints = function(self)
@@ -715,76 +695,39 @@ StatusBar.GetPoint = function(self, ...)
 end
 
 StatusBar.SetSize = function(self, ...)
-	Bars[self].scaffold:SetSize(...)
-	if self.PostUpdateSize then 
+	local data = Bars[self]
+	data.scaffold:SetSize(...)
+	if self.PostUpdateSize then
 		self:PostUpdateSize(...)
-	end 
+	end
 end
 
 StatusBar.SetWidth = function(self, ...)
-	Bars[self].scaffold:SetWidth(...)
-	if self.PostUpdateWidth then 
+	local data = Bars[self]
+	data.scaffold:SetWidth(...)
+	if self.PostUpdateWidth then
 		self:PostUpdateWidth(...)
-	end 
+	end
 end
 
 StatusBar.SetHeight = function(self, ...)
-	Bars[self].scaffold:SetHeight(...)
-	if self.PostUpdateHeight then 
+	local data = Bars[self]
+	data.scaffold:SetHeight(...)
+	if self.PostUpdateHeight then
 		self:PostUpdateHeight(...)
-	end 
+	end
 end
 
-StatusBar.GetHeight = LibStatusBar:IsBuild("8.2.0") and 
-function(self, ...)
+StatusBar.GetHeight = function(self, ...)
 	return Bars[self].scaffold:GetHeight()
 end
-or
-function(self, ...)
-	local top = self:GetTop()
-	local bottom = self:GetBottom()
-	if top and bottom then
-		return top - bottom
-	else
-		return Bars[self].scaffold:GetHeight(...)
-	end
-end
 
-StatusBar.GetWidth = LibStatusBar:IsBuild("8.2.0") and 
-function(self, ...)
+StatusBar.GetWidth = function(self, ...)
 	return Bars[self].scaffold:GetWidth()
 end
-or
-function(self, ...)
-	local left = self:GetLeft()
-	local right = self:GetRight()
-	if left and right then
-		return right - left
-	else
-		return Bars[self].scaffold:GetWidth(...)
-	end
-end
 
-StatusBar.GetSize = LibStatusBar:IsBuild("8.2.0") and 
-function(self, ...)
+StatusBar.GetSize = function(self, ...)
 	return Bars[self].scaffold:GetWidth(), Bars[self].scaffold:GetHeight()
-end
-or 
-function(self, ...)
-	local top = self:GetTop()
-	local bottom = self:GetBottom()
-	local left = self:GetLeft()
-	local right = self:GetRight()
-
-	local width, height
-	if left and right then
-		width = right - left
-	end
-	if top and bottom then
-		height = top - bottom
-	end
-
-	return width or Bars[self].scaffold:GetWidth(), height or Bars[self].scaffold:GetHeight()
 end
 
 StatusBar.SetFrameLevel = function(self, ...)
@@ -819,7 +762,7 @@ StatusBar.GetStatusBarColor = function(self)
 	return Bars[self].bar:GetVertexColor()
 end
 
--- Don't like exposing this, 
+-- Don't like exposing this,
 -- but it just makes life easier for some modules.
 StatusBar.GetStatusBarTexture = function(self)
 	return Bars[self].bar
@@ -856,7 +799,7 @@ StatusBar.IsForbidden = function(self) return true end
 
 LibStatusBar.CreateStatusBar = function(self, parent)
 
-	-- The scaffold is the top level frame object 
+	-- The scaffold is the top level frame object
 	-- that will respond to SetSize, SetPoint and similar.
 	local scaffold = CreateFrame("Frame", nil, parent or self)
 	scaffold:SetSize(1,1)
@@ -869,8 +812,8 @@ LibStatusBar.CreateStatusBar = function(self, parent)
 	bar:SetPoint("LEFT")
 	bar:SetWidth(scaffold:GetWidth())
 
-	-- rare gem of a texture, works nicely on bars smaller than 256px in effective width 
-	bar:SetTexture([[Interface\FontStyles\FontStyleMetal]]) 
+	-- rare gem of a texture, works nicely on bars smaller than 256px in effective width
+	bar:SetTexture([[Interface\FontStyles\FontStyleMetal]])
 	
 	-- the spark texture
 	local spark = scaffold:CreateTexture()
@@ -897,19 +840,19 @@ LibStatusBar.CreateStatusBar = function(self, parent)
 	data.scaffold = scaffold
 	data.bar = bar
 	data.spark = spark
-	data.statusbar = statusbar 
+	data.statusbar = statusbar
 
 	data.barMin = 0 -- min value
 	data.barMax = 1 -- max value
 	data.barValue = 0 -- real value
 	data.barDisplayValue = 0 -- displayed value while smoothing
-	data.barOrientation = "RIGHT" -- direction the bar is growing in 
+	data.barOrientation = "RIGHT" -- direction the bar is growing in
 	data.barSmoothingMode = "bezier-fast-in-slow-out"
 
 	data.sparkThickness = 8
 	data.sparkOffset = 1/32
 	data.sparkDirection = "IN"
-	data.sparkDurationIn = .75 
+	data.sparkDurationIn = .75
 	data.sparkDurationOut = .55
 	data.sparkMinAlpha = .25
 	data.sparkMaxAlpha = .95
@@ -924,7 +867,7 @@ LibStatusBar.CreateStatusBar = function(self, parent)
 	Bars[scaffold] = data
 	Bars[bar] = data
 
-	-- Virtual texcoord handling 
+	-- Virtual texcoord handling
 	local texCoords = { 0, 1, 0, 1 }
 	texCoords._owner = statusbar
 

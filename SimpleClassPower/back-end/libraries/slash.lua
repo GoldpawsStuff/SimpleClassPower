@@ -1,4 +1,4 @@
-local LibSlash = CogWheel:Set("LibSlash", 7)
+local LibSlash = Wheel:Set("LibSlash", 9)
 if (not LibSlash) then	
 	return
 end
@@ -11,6 +11,7 @@ local error = error
 local pairs = pairs
 local select = select
 local string_find = string.find
+local string_format = string.format
 local string_gsub = string.gsub
 local string_join = string.join
 local string_lower = string.lower
@@ -46,7 +47,7 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 local parseArguments = function(msg)
@@ -80,7 +81,7 @@ LibSlash.RegisterChatCommand = function(self, command, func, forced)
 	end 
 	
 	-- Create a unique name for the command
-	local name = "CG_CHATCOMMAND_"..string_upper(command) 
+	local name = "GP_CHATCOMMAND_"..string_upper(command) 
 
 	-- Register the chat command, keep it lowercase
 	_G["SLASH_"..name.."1"] = "/"..string_lower(command)
@@ -88,7 +89,8 @@ LibSlash.RegisterChatCommand = function(self, command, func, forced)
 	-- Register the function called by the command 
 	if (type(func) == "function") then 
 		SlashCmdList[name] = function(msg, editBox)
-			func(editBox, parseArguments(msg))
+			-- Make the arguments lower case, we don't want case sensitivity here. 
+			func(editBox, parseArguments(string_lower(msg)))
 		end 
 	else 
 		local module = self -- overdoing the locals?
@@ -120,7 +122,7 @@ LibSlash.UnregisterChatCommand = function(self, command)
 	-- Generate the name as it was stored
 	-- *Future library versions must either follow this format,
 	--  or take this older version into account when upgrading. 
-	local name = "CG_CHATCOMMAND_"..string_upper(command) 
+	local name = "GP_CHATCOMMAND_"..string_upper(command) 
 
 	-- Kill the slash command
 	_G["SLASH_"..name.."1"] = nil
@@ -158,7 +160,7 @@ for command,func in pairs(Commands) do
 	-- Re-generate the name
 	-- *if we change the format of the name, 
 	--  we must take older formats into account.
-	local name = "CG_CHATCOMMAND_"..string_upper(command) 
+	local name = "GP_CHATCOMMAND_"..string_upper(command) 
 
 	-- Update registered functions to use our current argument parsing.
 	if (type(func) == "function") then 

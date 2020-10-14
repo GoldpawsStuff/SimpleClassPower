@@ -83,6 +83,7 @@ local Enable = function(self)
 		element._owner = self
 		element.ForceUpdate = ForceUpdate
 
+		self:RegisterEvent("UNIT_HEALTH", Proxy)
 		self:RegisterEvent("UNIT_POWER_BAR_SHOW", Proxy)
 		self:RegisterEvent("UNIT_POWER_BAR_HIDE", Proxy)
 		self:RegisterEvent("UNIT_POWER_UPDATE", Proxy)
@@ -102,6 +103,7 @@ local Disable = function(self)
 	if element then
 		element:Hide()
 
+		self:UnregisterEvent("UNIT_HEALTH", Proxy)
 		self:UnregisterEvent("PLAYER_FLAGS_CHANGED", Proxy)
 		self:UnregisterEvent("UNIT_POWER_FREQUENT", Proxy)
 		self:UnregisterEvent("UNIT_POWER_UPDATE", Proxy)
@@ -115,6 +117,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("UnitStatus", Enable, Disable, Proxy, 7)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("UnitStatus", Enable, Disable, Proxy, 8)
 end 

@@ -1,24 +1,23 @@
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "UnitName requires LibClientBuild to be loaded.")
 
 -- Lua API
-local _G = _G
+local string_len = string.len
+local string_split = string.split
 
 -- WoW API
-local UnitClassification = _G.UnitClassification
-local UnitFactionGroup = _G.UnitFactionGroup
-local UnitIsPlayer = _G.UnitIsPlayer
-local UnitIsPVP = _G.UnitIsPVP
-local UnitIsPVPFreeForAll = _G.UnitIsPVPFreeForAll
-local UnitIsPVPSanctuary = _G.UnitIsPVPSanctuary
-local UnitLevel = _G.UnitLevel
-local UnitName = _G.UnitName
+local GetQuestGreenRange = GetQuestGreenRange
+local GetScalingQuestGreenRange = GetScalingQuestGreenRange
+local UnitClassification = UnitClassification
+local UnitEffectiveLevel = UnitEffectiveLevel or UnitLevel -- cheap fix
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitQuestTrivialLevelRange = UnitQuestTrivialLevelRange or GetQuestGreenRange
+local UnitQuestTrivialLevelRangeScaling = UnitQuestTrivialLevelRangeScaling or GetScalingQuestGreenRange
 
-local ELITE_TEXTURE = "|cffff4444+|r"
-local RARE_TEXTURE = "|cff0070dd(" .. ITEM_QUALITY3_DESC .. ") |r"
-local BOSS_TEXTURE = "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:16:16:-2:1|t"
-local FFA_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-FFA:16:12:-2:1:64:64:6:34:0:40|t"
-local ALLIANCE_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Alliance:16:12:-2:1:64:64:6:34:0:40|t"
-local HORDE_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Horde:16:16:-4:0:64:64:0:40:0:40|t"
-local NEUTRAL_TEXTURE = "|TInterface\\TargetingFrame\\UI-PVP-Neutral:16:12:-2:1:64:64:6:34:0:40|t"
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 local utf8sub = function(str, i, dots)
 	if not str then return end
@@ -49,56 +48,131 @@ local utf8sub = function(str, i, dots)
 	end
 end
 
+-- Returns the correct difficulty color compared to the player.
+-- Using this as a tooltip method to access our custom colors.
+-- *Sourced from /back-end/tooltip.lua
+local GetDifficultyColorByLevel
+if (IsClassic) then
+	GetDifficultyColorByLevel = function(self, level, isScaling)
+		local colors = self.colors.quest
+		local levelDiff = level - UnitLevel("player")
+		if (isScaling) then
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= 0) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= GetScalingQuestGreenRange()) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		else
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= -2) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= GetQuestGreenRange()) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		end
+	end
+elseif (IsRetail) then
+	GetDifficultyColorByLevel = function(self, level, isScaling)
+		local colors = self.colors.quest
+		if (isScaling) then
+			local levelDiff = level - UnitEffectiveLevel("player")
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= 0) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= -UnitQuestTrivialLevelRangeScaling("player")) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		else
+			local levelDiff = level - UnitLevel("player")
+			if (levelDiff > 5) then
+				return colors.red[1], colors.red[2], colors.red[3], colors.red.colorCode
+			elseif (levelDiff > 3) then
+				return colors.orange[1], colors.orange[2], colors.orange[3], colors.orange.colorCode
+			elseif (levelDiff >= -4) then
+				return colors.yellow[1], colors.yellow[2], colors.yellow[3], colors.yellow.colorCode
+			elseif (-levelDiff <= -UnitQuestTrivialLevelRange("player")) then
+				return colors.green[1], colors.green[2], colors.green[3], colors.green.colorCode
+			else
+				return colors.gray[1], colors.gray[2], colors.gray[3], colors.gray.colorCode
+			end
+		end
+	end
+end
+
 local Update = function(self, event, unit)
 	if (not unit) or (unit ~= self.unit) then 
 		return 
 	end 
 
 	local element = self.Name
-	if element.PreUpdate then
+	if (element.PreUpdate) then
 		element:PreUpdate(unit)
 	end
 
 	-- Retrieve data
-	local name, realm = UnitName(unit)
-	local level = UnitLevel(unit)
-	local classification = (level and (level < 1)) and "worldboss" or UnitClassification(unit)
-
-	local isBoss = classification == "boss" or classification == "worldboss"
-	local isElite = classification == "elite" or classification == "rareelite"
-	local isRare = classification == "rare" or classification == "rareelite"
-	local isPvP = UnitIsPVP(unit) or UnitIsPVPFreeForAll(unit)
-
-	-- Truncate name
-	if element.maxChars then 
-		name = utf8sub(name, element.maxChars, element.useDots)
-	end 
-
-	-- Display a fitting PvP icon, but suppress it if the unit is a PvP enabled boss, elite or rare
-	if element.showPvP and isPvP and not(element.showBoss and isBoss) and not(element.showElite and isElite) and not(element.showRare and isRare) then 
-		local faction = UnitFactionGroup(unit)
-		local pvp = (faction == "Alliance") and ALLIANCE_TEXTURE or (faction == "Horde") and HORDE_TEXTURE or FFA_TEXTURE
-		name = name .. pvp
-	end 
-
-	-- Show a plus sign for elites, but suppress it if the unit is a boss
-	if element.showElite and isElite and not(element.showBoss and isBoss) then 
-		name = name .. ELITE_TEXTURE
+	local name = UnitName(unit)
+	if (not name) then 
+		element:SetText("")
+		return
 	end
 
-	-- Display a rare indicator
-	if element.showRare and isRare then 
-		name = RARE_TEXTURE .. name
+	local nameLength = string_len(name)
+	local levelText, levelTextLength, showLevel
+
+	if (element.showLevel) then
+		local level = UnitEffectiveLevel(unit)
+		if (level and level > 0) then 
+			local r, g, b, colorCode = GetDifficultyColorByLevel(self, level)
+			levelText = colorCode .. level .. "|r"
+			levelTextLength = level >= 100 and 5 or level >= 10 and 4 or 3
+			showLevel = true
+		end 
 	end
 
-	-- Show the boss skull
-	if element.showBoss and isBoss then 
-		name = name .. BOSS_TEXTURE
+	local fullLength = (showLevel) and (nameLength + levelTextLength) or (nameLength)
+	if (element.maxChars) and (fullLength > element.maxChars) then 
+		local maxChars = (showLevel) and (element.maxChars - levelTextLength) or (element.maxChars)
+		if (element.useSmartName) then
+			local nameTable = { string_split(" ", name) }
+			if (#nameTable > 1) then
+				if string_len(nameTable[#nameTable]) < maxChars then
+					name = nameTable[#nameTable]
+				else
+					name = utf8sub(name, maxChars, element.useDots)
+				end
+			end
+		else
+			name = utf8sub(name, maxChars, element.useDots)
+		end
+	end 
+
+	if (showLevel) then
+		if (element.showLevelLast) then 
+			name = name .. " |cff888888:|r" .. levelText
+		else 
+			name = levelText .. "|cff888888:|r " .. name
+		end
 	end
 
 	element:SetText(name)
 
-	if element.PostUpdate then 
+	if (element.PostUpdate) then 
 		return element:PostUpdate(unit)
 	end 
 end 
@@ -117,9 +191,14 @@ local Enable = function(self)
 		element._owner = self
 		element.ForceUpdate = ForceUpdate
 
+		if (self.unit == "player") or (self.unit == "pet") then 
+			self:RegisterEvent("PLAYER_LEVEL_UP", Proxy, true)
+		end 
+
 		self:RegisterEvent("UNIT_NAME_UPDATE", Proxy)
 		self:RegisterEvent("UNIT_CLASSIFICATION_CHANGED", Proxy)
 		self:RegisterEvent("UNIT_FACTION", Proxy)
+		self:RegisterEvent("UNIT_LEVEL", Proxy)
 		self:RegisterEvent("ZONE_CHANGED_NEW_AREA", Proxy, true)
 
 		return true
@@ -131,14 +210,16 @@ local Disable = function(self)
 	if element then
 		element:Hide()
 
+		self:UnregisterEvent("PLAYER_LEVEL_UP", Proxy)
 		self:UnregisterEvent("UNIT_NAME_UPDATE", Proxy)
 		self:UnregisterEvent("UNIT_CLASSIFICATION_CHANGED", Proxy)
 		self:UnregisterEvent("UNIT_FACTION", Proxy)
+		self:UnregisterEvent("UNIT_LEVEL", Proxy)
 		self:UnregisterEvent("ZONE_CHANGED_NEW_AREA", Proxy)
 	end
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Name", Enable, Disable, Proxy, 6)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("Name", Enable, Disable, Proxy, 13)
 end 

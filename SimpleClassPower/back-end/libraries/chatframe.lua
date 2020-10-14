@@ -1,21 +1,21 @@
-local LibChatWindow, version = CogWheel:Set("LibChatWindow", 25)
+local LibChatWindow, version = Wheel:Set("LibChatWindow", 31)
 if (not LibChatWindow) then	
 	return
 end
 
-local LibClientBuild = CogWheel("LibClientBuild")
-assert(LibClientBuild, "LibChatWindow requires LibClientBuild to be loaded.")
-
-local LibMessage = CogWheel("LibMessage")
+local LibMessage = Wheel("LibMessage")
 assert(LibMessage, "LibChatWindow requires LibMessage to be loaded.")
 
-local LibEvent = CogWheel("LibEvent")
+local LibEvent = Wheel("LibEvent")
 assert(LibEvent, "LibChatWindow requires LibEvent to be loaded.")
 
-local LibFrame = CogWheel("LibFrame")
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "LibCast requires LibClientBuild to be loaded.")
+
+local LibFrame = Wheel("LibFrame")
 assert(LibFrame, "LibChatWindow requires LibFrame to be loaded.")
 
-local LibSecureHook = CogWheel("LibSecureHook")
+local LibSecureHook = Wheel("LibSecureHook")
 assert(LibSecureHook, "LibChatWindow requires LibSecureHook to be loaded.")
 
 -- Embed event functionality into this
@@ -33,6 +33,7 @@ local ipairs = ipairs
 local pairs = pairs
 local select = select
 local string_find = string.find
+local string_format = string.format
 local string_join = string.join
 local string_match = string.match
 local table_insert = table.insert
@@ -40,13 +41,18 @@ local type = type
 local unpack = unpack
 
 -- WoW API
-local FCF_GetCurrentChatFrame = _G.FCF_GetCurrentChatFrame
-local GetCVar = _G.GetCVar
-local UIFrameFadeRemoveFrame = _G.UIFrameFadeRemoveFrame
+local FCF_GetCurrentChatFrame = FCF_GetCurrentChatFrame
+local GetCVar = GetCVar
+local hooksecurefunc = hooksecurefunc
+local UIFrameFadeRemoveFrame = UIFrameFadeRemoveFrame
 
 -- WoW Objects
-local CHAT_FRAMES = _G.CHAT_FRAMES
-local CHAT_FRAME_TEXTURES = _G.CHAT_FRAME_TEXTURES
+local CHAT_FRAMES = CHAT_FRAMES
+local CHAT_FRAME_TEXTURES = CHAT_FRAME_TEXTURES
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 -- Create or retrieve our registries
 LibChatWindow.embeds = LibChatWindow.embeds or {}
@@ -63,13 +69,13 @@ local SetAlpha = LibChatWindow.frame.SetAlpha
 local check = function(value, num, ...)
 	assert(type(num) == "number", ("Bad argument #%.0f to '%s': %s expected, got %s"):format(2, "Check", "number", type(num)))
 	for i = 1,select("#", ...) do
-		if (type(value) == select(i, ...)) then 
+		if type(value) == select(i, ...) then 
 			return 
 		end
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
 -- module post create/post handle updates
@@ -359,8 +365,20 @@ LibChatWindow.GetChatWindowCurrentEditBox = function(self, frame)
 	end
 end 
 
+LibChatWindow.GetChatWindowScrollUpButton = function(self, frame)
+	return _G[frame:GetName().."ButtonFrameUpButton"]
+end 
+
+LibChatWindow.GetChatWindowScrollDownButton = function(self, frame)
+	return _G[frame:GetName().."ButtonFrameDownButton"]
+end 
+
 LibChatWindow.GetChatWindowScrollToBottomButton = function(self, frame)
-	return frame.ScrollToBottomButton
+	if (IsRetail) then
+		return frame.ScrollToBottomButton
+	elseif (IsClassic) then
+		return _G[frame:GetName().."ButtonFrameBottomButton"]
+	end
 end 
 
 LibChatWindow.GetChatWindowScrollBar = function(self, frame)
@@ -392,8 +410,8 @@ LibChatWindow.OnEvent = function(self, event, ...)
 	or (event == "UPDATE_FLOATING_CHAT_WINDOWS") 
 	or (event == "UI_SCALE_CHANGED") 
 	or (event == "DISPLAY_SIZE_CHANGED") 
-	or (event == "CG_VIDEO_OPTIONS_APPLY") 
-	or (event == "CG_VIDEO_OPTIONS_OKAY") 
+	or (event == "GP_VIDEO_OPTIONS_APPLY") 
+	or (event == "GP_VIDEO_OPTIONS_OKAY") 
 	or (event == "PLAYER_ENTERING_WORLD") then 
 		self:UpdateChatWindowPositions(true)
 	end 
@@ -402,8 +420,8 @@ LibChatWindow.OnEvent = function(self, event, ...)
 	or (event == "UPDATE_FLOATING_CHAT_WINDOWS") 
 	or (event == "UI_SCALE_CHANGED") 
 	or (event == "DISPLAY_SIZE_CHANGED") 
-	or (event == "CG_VIDEO_OPTIONS_APPLY") 
-	or (event == "CG_VIDEO_OPTIONS_OKAY") 
+	or (event == "GP_VIDEO_OPTIONS_APPLY") 
+	or (event == "GP_VIDEO_OPTIONS_OKAY") 
 	or (event == "PLAYER_ENTERING_WORLD") then 
 		self:UpdateChatWindowSizes(true)
 	end 
@@ -413,7 +431,7 @@ LibChatWindow.OnEvent = function(self, event, ...)
 		self:UpdateChatWindowColors(true)
 	end 
 
-	if (event == "CG_OPEN_TEMPORARY_CHAT_WINDOW") then 
+	if (event == "GP_OPEN_TEMPORARY_CHAT_WINDOW") then 
 		local currentFrame = ...
 		self:HandleWindow(currentFrame, currentFrame.isTemporary, select(2, ...))
 	end 
@@ -433,20 +451,20 @@ LibChatWindow.Enable = function(self)
 	-- fired on client scale, resolution or window size changes
 	self:RegisterEvent("UI_SCALE_CHANGED", "OnEvent")
 	self:RegisterEvent("DISPLAY_SIZE_CHANGED", "OnEvent")
-	self:RegisterMessage("CG_VIDEO_OPTIONS_APPLY", "OnEvent")
-	self:RegisterMessage("CG_VIDEO_OPTIONS_OKAY", "OnEvent")
+	self:RegisterMessage("GP_VIDEO_OPTIONS_APPLY", "OnEvent")
+	self:RegisterMessage("GP_VIDEO_OPTIONS_OKAY", "OnEvent")
 
 	-- forcefully fired upon temporary window creation
-	self:RegisterMessage("CG_OPEN_TEMPORARY_CHAT_WINDOW", "OnEvent")
+	self:RegisterMessage("GP_OPEN_TEMPORARY_CHAT_WINDOW", "OnEvent")
 
 	-- proxy temporary windows creation through our event system
 	-- @return currentFrame, chatType, chatTarget, sourceChatFrame, selectWindow 
 	self:SetSecureHook("FCF_OpenTemporaryWindow", function(...) 
 		local frame = FCF_GetCurrentChatFrame()
 		if frame then 
-			self:SendMessage("CG_OPEN_TEMPORARY_CHAT_WINDOW", frame, ...) 
+			self:SendMessage("GP_OPEN_TEMPORARY_CHAT_WINDOW", frame, ...) 
 		end 
-	end, "CG_OPEN_TEMPORARY_CHAT_WINDOW")
+	end, "GP_OPEN_TEMPORARY_CHAT_WINDOW")
 
 	-- initial positioning
 	self:UpdateChatWindowPositions(true)
@@ -490,6 +508,8 @@ local embedMethods = {
 	GetChatWindowEditBox = true, 
 	GetChatWindowMenuButton = true,
 	GetChatWindowMinimizeButton = true, 
+	GetChatWindowScrollUpButton = true, 
+	GetChatWindowScrollDownButton = true, 
 	GetChatWindowScrollToBottomButton = true, 
 	GetChatWindowScrollBar = true, 
 	GetChatWindowScrollBarThumbTexture = true, 

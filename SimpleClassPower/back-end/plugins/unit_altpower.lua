@@ -1,16 +1,48 @@
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "UnitAltPower requires LibClientBuild to be loaded.")
+
+-- This library is for Retail only!
+if (LibClientBuild:IsClassic()) then
+	return
+end
+
 -- Lua API
 local _G = _G
+local math_floor = math.floor
 local string_format = string.format
 local tonumber = tonumber
 local tostring = tostring
 
 -- WoW API
-local UnitAlternatePowerInfo = _G.UnitAlternatePowerInfo
-local UnitPower = _G.UnitPower
-local UnitPowerMax = _G.UnitPowerMax
+local GetAlternatePowerInfoByID = GetAlternatePowerInfoByID
+local GetUnitPowerBarInfoByID = GetUnitPowerBarInfoByID
+local GetUnitPowerBarStringsByID = GetUnitPowerBarStringsByID
+local UnitAlternatePowerInfo = UnitAlternatePowerInfo
+local UnitPower = UnitPower
+local UnitPowerBarID = UnitPowerBarID
+local UnitPowerMax = UnitPowerMax
 
 -- Sourced from BlizzardInterfaceResources/Resources/EnumerationTables.lua
 local ALTERNATE_POWER_INDEX = Enum and Enum.PowerType.Alternate or ALTERNATE_POWER_INDEX or 10
+
+-- Sourced from Interface/AddOns/Blizzard_Deprecated/Deprecated_8_3_0.lua
+if (not GetAlternatePowerInfoByID) then
+	GetAlternatePowerInfoByID = function(barID)
+		local GetUnitPowerBarInfoByID = GetUnitPowerBarInfoByID
+		local GetUnitPowerBarStringsByID = GetUnitPowerBarStringsByID
+		local barInfo = GetUnitPowerBarInfoByID(barID)
+		if (barInfo) then
+			local name, tooltip, cost = GetUnitPowerBarStringsByID(barID)
+			return barInfo.barType,barInfo.minPower, barInfo.startInset, barInfo.endInset, barInfo.smooth, barInfo.hideFromOthers, barInfo.showOnRaid, barInfo.opaqueSpark, barInfo.opaqueFlash, barInfo.anchorTop, name, tooltip, cost, barInfo.ID, barInfo.forcePercentage, barInfo.sparkUnderFrame
+		end
+	end
+end
+if (not UnitAlternatePowerInfo) then
+	UnitAlternatePowerInfo = function(unit)
+		local barID = UnitPowerBarID(unit)
+		return GetAlternatePowerInfoByID(barID)
+	end
+end
 
 -- Number abbreviations
 ---------------------------------------------------------------------	
@@ -34,9 +66,25 @@ local short = function(value)
 	elseif value >= 1e3 or value <= -1e3 then
 		return ("%.1fk"):format(value / 1e3):gsub("%.?0+([kmb])$", "%1")
 	else
-		return tostring(value - value%1)
+		return tostring(math_floor(value))
 	end	
 end
+
+-- zhCN exceptions
+local gameLocale = GetLocale()
+if (gameLocale == "zhCN") then 
+	short = function(value)
+		value = tonumber(value)
+		if (not value) then return "" end
+		if (value >= 1e8) then
+			return ("%.1f亿"):format(value / 1e8):gsub("%.?0+([km])$", "%1")
+		elseif value >= 1e4 or value <= -1e3 then
+			return ("%.1f万"):format(value / 1e4):gsub("%.?0+([km])$", "%1")
+		else
+			return tostring(math_floor(value))
+		end 
+	end
+end 
 
 -- Borrow the unitframe tooltip
 local GetTooltip = function(element)
@@ -68,8 +116,8 @@ local UpdateValue = function(element, unit, current, min, max)
 	end
 	local value = element.Value or element:IsObjectType("FontString") and element 
 	if value then
-		if (current == 0 or max == 0) and (not value.showAtZero) then
-			value:SetText("")
+		if (current == 0 or max == 0) then
+			value:SetText(EMPTY)
 		else
 			if value.showPercent then
 				if value.showMaximum then
@@ -89,9 +137,9 @@ local UpdateValue = function(element, unit, current, min, max)
 end 
 
 local Update = function(self, event, unit, powerType)
-	if (not unit) or ((unit ~= self.unit) and (unit ~= self.realUnit)) then 
-		return 
-	end 
+	if (not unit) or ((unit ~= self.unit) and (unit ~= self.realUnit)) then
+		return
+	end
 
 	-- Could be the player in a vehicle
 	unit = self.realUnit or unit
@@ -102,13 +150,13 @@ local Update = function(self, event, unit, powerType)
 	end 
 
 	local element = self.AltPower
-	if element.visibilityFilter then 
+	if (element.visibilityFilter) then 
 		if (not element:visibilityFilter(unit)) then 
 			return element:Hide()
 		end
 	end
 
-	if element.PreUpdate then
+	if (element.PreUpdate) then
 		element:PreUpdate(unit)
 	end
 
@@ -129,10 +177,10 @@ local Update = function(self, event, unit, powerType)
 		element:Show()
 	end 
 
-	if element.PostUpdate then 
+	if (element.PostUpdate) then
 		element:PostUpdate(unit, specIndex)
-	end 
-end 
+	end
+end
 
 local Proxy = function(self, ...)
 	return (self.AltPower.Override or Update)(self, ...)
@@ -179,6 +227,6 @@ local Disable = function(self)
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("AltPower", Enable, Disable, Proxy, 10)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do
+	Lib:RegisterElement("AltPower", Enable, Disable, Proxy, 15)
 end 

@@ -1,9 +1,20 @@
-
--- Lua API
-local _G = _G
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "UnitGroupRole requires LibClientBuild to be loaded.")
 
 -- WoW API
-local UnitGroupRolesAssigned = _G.UnitGroupRolesAssigned
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
+
+-- WoW Dummy API for now.
+-- We will find a way to figure this out better later on. Maybe. 
+if (IsClassic) then
+	UnitGroupRolesAssigned = function(unit)
+		return "DAMAGER"
+	end
+end
 
 local roleToObject = { TANK = "Tank", HEALER = "Healer", DAMAGER = "Damager" }
 
@@ -13,7 +24,7 @@ local Update = function(self, event, unit)
 	end 
 
 	local element = self.GroupRole
-	if element.PreUpdate then
+	if (element.PreUpdate) then
 		element:PreUpdate(unit)
 	end
 
@@ -22,29 +33,29 @@ local Update = function(self, event, unit)
 		local hasRoleTexture
 		for role, objectName in pairs(roleToObject) do 
 			local object = element[objectName]
-			if object then 
+			if (object) then 
 				object:SetShown(role == groupRole)
 				hasRoleTexture = true
 			end 
 		end 
 		if (element.Show and hasRoleTexture) then 
 			element:Show()
-		elseif element.Hide then  
+		elseif (element.Hide) then  
 			element:Hide()
 		end 
 	else
 		for role, objectName in pairs(roleToObject) do 
 			local object = element[objectName]
-			if object then 
+			if (object) then 
 				object:Hide()
 			end 
 		end 
-		if element.Hide then 
+		if (element.Hide) then 
 			element:Hide()
 		end 
 	end
 
-	if element.PostUpdate then 
+	if (element.PostUpdate) then 
 		return element:PostUpdate(unit, groupRole)
 	end
 end 
@@ -73,14 +84,7 @@ local Enable = function(self)
 			element:Hide()
 		end 
 
-		if (self.unit == "player") then
-			self:RegisterEvent("PLAYER_ROLES_ASSIGNED", Proxy, true)
-		else
-			-- Avoid duplicate events, library fires this for all elements on raid/party
-			if (not self.unit:match("^party(%d+)")) and (not self.unit:match("^raid(%d+)")) then 
-				self:RegisterEvent("GROUP_ROSTER_UPDATE", Proxy, true)
-			end 
-		end
+		self:RegisterEvent("GROUP_ROSTER_UPDATE", Proxy, true)
 
 		return true 
 	end
@@ -89,7 +93,6 @@ end
 local Disable = function(self)
 	local element = self.GroupRole
 	if element then
-
 		for role, objectName in pairs(roleToObject) do 
 			local object = element[objectName]
 			if object then 
@@ -99,13 +102,11 @@ local Disable = function(self)
 		if element.Hide then 
 			element:Hide()
 		end 
-
-		self:UnregisterEvent("PLAYER_ROLES_ASSIGNED", Proxy)
 		self:UnregisterEvent("GROUP_ROSTER_UPDATE", Proxy)
 	end
 end 
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (CogWheel("LibUnitFrame", true)), (CogWheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("GroupRole", Enable, Disable, Proxy, 13)
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
+	Lib:RegisterElement("GroupRole", Enable, Disable, Proxy, 16)
 end 

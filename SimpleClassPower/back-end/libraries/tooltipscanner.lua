@@ -1,10 +1,12 @@
-local LibTooltipScanner = CogWheel:Set("LibTooltipScanner", 31)
+local LibTooltipScanner = Wheel:Set("LibTooltipScanner", 63)
 if (not LibTooltipScanner) then	
 	return
 end
 
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "LibTooltipScanner requires LibClientBuild to be loaded.")
+
 -- Lua API
-local _G = _G
 local assert = assert
 local debugstack = debugstack
 local error = error
@@ -16,57 +18,59 @@ local string_gsub = string.gsub
 local string_lower = string.lower
 local string_join = string.join
 local string_match = string.match
+local string_split = string.split
 local string_sub = string.sub
 local tonumber = tonumber
 local type = type
 
 -- WoW API
-local CreateFrame = _G.CreateFrame
-local GetAchievementInfo = _G.GetAchievementInfo
-local GetActionCharges = _G.GetActionCharges
-local GetActionCooldown = _G.GetActionCooldown
-local GetActionCount = _G.GetActionCount
-local GetActionLossOfControlCooldown = _G.GetActionLossOfControlCooldown
-local GetActionText = _G.GetActionText
-local GetActionTexture = _G.GetActionTexture
-local GetBestMapForUnit = _G.C_Map.GetBestMapForUnit
-local GetDetailedItemLevelInfo = _G.GetDetailedItemLevelInfo 
-local GetGuildBankItemInfo = _G.GetSpecializationRole
-local GetGuildInfo = _G.GetGuildInfo
-local GetItemInfo = _G.GetItemInfo
-local GetItemQualityColor = _G.GetItemQualityColor
-local GetItemStats = _G.GetItemStats
-local GetSpecialization = _G.GetSpecialization
-local GetSpecializationInfo = _G.GetSpecializationInfo
-local GetSpecializationRole = _G.GetSpecializationRole
-local GetSpellInfo = _G.GetSpellInfo
-local HasAction = _G.HasAction
-local IsActionInRange = _G.IsActionInRange
-local UnitBattlePetLevel = _G.UnitBattlePetLevel
-local UnitClass = _G.UnitClass 
-local UnitClassification = _G.UnitClassification
-local UnitCreatureFamily = _G.UnitCreatureFamily
-local UnitCreatureType = _G.UnitCreatureType
-local UnitExists = _G.UnitExists
-local UnitEffectiveLevel = _G.UnitEffectiveLevel
-local UnitFactionGroup = _G.UnitFactionGroup
-local UnitInParty = _G.UnitInParty
-local UnitInRaid = _G.UnitInRaid
-local UnitIsBattlePetCompanion = _G.UnitIsBattlePetCompanion
-local UnitIsDead = _G.UnitIsDead
-local UnitIsGhost = _G.UnitIsGhost
-local UnitIsPlayer = _G.UnitIsPlayer
-local UnitIsWildBattlePet = _G.UnitIsWildBattlePet
-local UnitLevel = _G.UnitLevel
-local UnitName = _G.UnitName
-local UnitRace = _G.UnitRace
-local UnitReaction = _G.UnitReaction
-local DoesSpellExist = _G.C_Spell.DoesSpellExist 
+local CreateFrame = CreateFrame
+local GetAchievementInfo = GetAchievementInfo
+local GetActionCharges = GetActionCharges
+local GetActionCooldown = GetActionCooldown
+local GetActionCount = GetActionCount
+local GetActionLossOfControlCooldown = GetActionLossOfControlCooldown
+local GetActionText = GetActionText
+local GetActionTexture = GetActionTexture
+local GetBestMapForUnit = C_Map.GetBestMapForUnit
+local GetContainerItemID = GetContainerItemID
+local GetDetailedItemLevelInfo = GetDetailedItemLevelInfo 
+local GetGuildBankItemInfo = GetSpecializationRole
+local GetGuildInfo = GetGuildInfo
+local GetItemInfo = GetItemInfo
+local GetItemQualityColor = GetItemQualityColor
+local GetItemStats = GetItemStats
+local GetSpecialization = GetSpecialization
+local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecializationRole = GetSpecializationRole
+local GetSpellInfo = GetSpellInfo
+local GetTrackingTexture = GetTrackingTexture
+local HasAction = HasAction
+local IsActionInRange = IsActionInRange
+local UnitClass = UnitClass 
+local UnitClassification = UnitClassification
+local UnitCreatureFamily = UnitCreatureFamily
+local UnitCreatureType = UnitCreatureType
+local UnitExists = UnitExists
+local UnitEffectiveLevel = UnitEffectiveLevel or UnitLevel -- yeah...
+local UnitFactionGroup = UnitFactionGroup
+local UnitIsDead = UnitIsDead
+local UnitIsGhost = UnitIsGhost
+local UnitIsPlayer = UnitIsPlayer
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitRace = UnitRace
+local UnitReaction = UnitReaction
+local DoesSpellExist = C_Spell.DoesSpellExist 
+
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
 
 LibTooltipScanner.embeds = LibTooltipScanner.embeds or {}
 
 -- Tooltip used for scanning
-LibTooltipScanner.scannerName = LibTooltipScanner.scannerName or "CG_TooltipScanner"
+LibTooltipScanner.scannerName = LibTooltipScanner.scannerName or "GP_TooltipScanner"
 LibTooltipScanner.scannerTooltip = LibTooltipScanner.scannerTooltip 
 								or CreateFrame("GameTooltip", LibTooltipScanner.scannerName, WorldFrame, "GameTooltipTemplate")
 
@@ -74,101 +78,80 @@ LibTooltipScanner.scannerTooltip = LibTooltipScanner.scannerTooltip
 local Scanner = LibTooltipScanner.scannerTooltip
 local ScannerName = LibTooltipScanner.scannerName
 
+-- Constants
+local playerClass = UnitClass("player")
+local pvpRanks = {
+	[ 1] = { 	PVP_RANK_5_0, 	PVP_RANK_5_1, 	136766 },
+	[ 2] = { 	PVP_RANK_6_0,	PVP_RANK_6_1, 	136767 },
+	[ 3] = { 	PVP_RANK_7_0, 	PVP_RANK_7_1, 	136768 },
+	[ 4] = { 	PVP_RANK_8_0, 	PVP_RANK_8_1, 	136769 },
+	[ 5] = { 	PVP_RANK_9_0, 	PVP_RANK_9_1, 	136770 },
+	[ 6] = { 	PVP_RANK_10_0, 	PVP_RANK_10_1, 	136771 },
+	[ 7] = { 	PVP_RANK_11_0, 	PVP_RANK_11_1, 	136772 },
+	[ 8] = { 	PVP_RANK_12_0, 	PVP_RANK_12_1, 	136773 },
+	[ 9] = { 	PVP_RANK_13_0, 	PVP_RANK_13_1, 	136774 },
+	[10] = { 	PVP_RANK_14_0, 	PVP_RANK_14_1, 	136775 },
+	[11] = { 	PVP_RANK_15_0, 	PVP_RANK_15_1, 	136776 },
+	[12] = { 	PVP_RANK_16_0, 	PVP_RANK_16_1, 	136777 },
+	[13] = { 	PVP_RANK_17_0, 	PVP_RANK_17_1, 	136778 },
+	[14] = { 	PVP_RANK_18_0, 	PVP_RANK_18_1, 	136779 },
+	[15] = { 	PVP_RANK_19_0, 	PVP_RANK_19_1, 	136780 },
+}
+
 -- Scanning Constants & Patterns
 ---------------------------------------------------------
 -- Localized Constants
 local Constants = {
-	CastChanneled = _G.SPELL_CAST_CHANNELED, 
-	CastInstant = _G.SPELL_RECAST_TIME_CHARGEUP_INSTANT,
-	CastTimeMin = _G.SPELL_CAST_TIME_MIN,
-	CastTimeSec = _G.SPELL_CAST_TIME_SEC, 
-	ContainerSlots = _G.CONTAINER_SLOTS, 
+	CastChanneled = SPELL_CAST_CHANNELED, 
+	CastInstant = SPELL_RECAST_TIME_CHARGEUP_INSTANT,
+	CastNextMelee = SPELL_ON_NEXT_SWING, 
+	CastNextRanged = SPELL_ON_NEXT_RANGED, 
+	CastTimeMin = SPELL_CAST_TIME_MIN,
+	CastTimeSec = SPELL_CAST_TIME_SEC, 
+	ContainerSlots = CONTAINER_SLOTS, 
 
-	CooldownRemaining = _G.COOLDOWN_REMAINING,
-	CooldownTimeRemaining1 = _G.ITEM_COOLDOWN_TIME,
-	CooldownTimeRemaining2 = _G.ITEM_COOLDOWN_TIME_MIN,
-	CooldownTimeRemaining3 = _G.ITEM_COOLDOWN_TIME_SEC,
+	CooldownRemaining = COOLDOWN_REMAINING,
+	CooldownTimeRemaining1 = ITEM_COOLDOWN_TIME,
+	CooldownTimeRemaining2 = ITEM_COOLDOWN_TIME_MIN,
+	CooldownTimeRemaining3 = ITEM_COOLDOWN_TIME_SEC,
 
-	RechargeTimeRemaining1 = _G.SPELL_RECHARGE_TIME,
-	RechargeTimeRemaining2 = _G.SPELL_RECHARGE_TIME_MIN,
-	RechargeTimeRemaining3 = _G.SPELL_RECHARGE_TIME_SEC,
+	RechargeTimeRemaining1 = SPELL_RECHARGE_TIME,
+	RechargeTimeRemaining2 = SPELL_RECHARGE_TIME_MIN,
+	RechargeTimeRemaining3 = SPELL_RECHARGE_TIME_SEC,
 
-	ItemBoundAccount = _G.ITEM_ACCOUNTBOUND,
-	ItemBoundBnet = _G.ITEM_BNETACCOUNTBOUND,
-	ItemBoundSoul = _G.ITEM_SOULBOUND,
-	ItemBlock = _G.SHIELD_BLOCK_TEMPLATE,
-	ItemDamage = _G.DAMAGE_TEMPLATE,
-	ItemDurability = _G.DURABILITY_TEMPLATE,
-	ItemLevel = _G.ITEM_LEVEL,
-	ItemReqLevel = _G.ITEM_MIN_LEVEL, 
-	ItemSellPrice = _G.SELL_PRICE, 
-	ItemUnique = _G.ITEM_UNIQUE, -- "Unique"
-	ItemUniqueEquip = _G.ITEM_UNIQUE_EQUIPPABLE, -- "Unique-Equipped"
-	ItemUniqueMultiple = _G.ITEM_UNIQUE_MULTIPLE, -- "Unique (%d)"
-	ItemEquipEffect = _G.ITEM_SPELL_TRIGGER_ONEQUIP, -- "Equip:"
-	ItemUseEffect = _G.ITEM_SPELL_TRIGGER_ONUSE, -- "Use:"
-	Level = _G.LEVEL,
+	ItemBoundAccount = ITEM_ACCOUNTBOUND,
+	ItemBoundBnet = ITEM_BNETACCOUNTBOUND,
+	ItemBoundSoul = ITEM_SOULBOUND,
+	ItemBlock = SHIELD_BLOCK_TEMPLATE,
+	ItemDamage = DAMAGE_TEMPLATE,
+	ItemDurability = DURABILITY_TEMPLATE,
+	ItemLevel = ITEM_LEVEL,
+	ItemReqLevel = ITEM_MIN_LEVEL, 
+	ItemSellPrice = SELL_PRICE, 
+	ItemUnique = ITEM_UNIQUE, -- "Unique"
+	ItemUniqueEquip = ITEM_UNIQUE_EQUIPPABLE, -- "Unique-Equipped"
+	ItemUniqueMultiple = ITEM_UNIQUE_MULTIPLE, -- "Unique (%d)"
+	ItemEquipEffect = ITEM_SPELL_TRIGGER_ONEQUIP, -- "Equip:"
+	ItemUseEffect = ITEM_SPELL_TRIGGER_ONUSE, -- "Use:"
+	Level = LEVEL,
 
-	RangeCaster = _G.SPELL_RANGE_AREA,
-	RangeMelee = _G.MELEE_RANGE,
-	RangeSpell = _G.SPELL_RANGE, -- SPELL_RANGE_DUAL = "%1$s: %2$s yd range"
-	RangeUnlimited = _G.SPELL_RANGE_UNLIMITED, 
+	PowerType1 = POWER_TYPE_ENERGY,
+	PowerType2 = POWER_TYPE_FOCUS,
+	PowerType3 = POWER_TYPE_MANA,
+	PowerType4 = POWER_TYPE_RED_POWER,
 
-	SpellRequiresForm = _G.SPELL_REQUIRED_FORM, 
+	RangeCaster = SPELL_RANGE_AREA,
+	RangeMelee = MELEE_RANGE,
+	RangeSpell = SPELL_RANGE, -- SPELL_RANGE_DUAL = "%1$s: %2$s yd range"
+	RangeUnlimited = SPELL_RANGE_UNLIMITED, 
+
+	SpellRequiresForm = SPELL_REQUIRED_FORM, 
+
+	UnitSkinnable1 = UNIT_SKINNABLE_LEATHER, -- "Skinnable"
+	UnitSkinnable2 = UNIT_SKINNABLE_BOLTS, -- "Requires Engineering"
+	UnitSkinnable3 = UNIT_SKINNABLE_HERB, -- "Requires Herbalism"
+	UnitSkinnable4 = UNIT_SKINNABLE_ROCK, -- "Requires Mining"
 }
-
--- Listing them for personal reference
---FRIENDS_LEVEL_TEMPLATE = "Level %d %s"
---UNIT_LETHAL_LEVEL_DEAD_TEMPLATE = "Level ?? Corpse"
---UNIT_LETHAL_LEVEL_TEMPLATE = "Level ??"
---UNIT_LEVEL_DEAD_TEMPLATE = "Level %d Corpse"
---UNIT_LEVEL_TEMPLATE = "Level %d"
---UNIT_PLUS_LEVEL_TEMPLATE = "Level %d Elite"
---UNIT_TYPE_LETHAL_LEVEL_TEMPLATE = "Level ?? %s"
---UNIT_TYPE_LEVEL_TEMPLATE = "Level %d %s"
---UNIT_TYPE_PLUS_LEVEL_TEMPLATE = "Level %d Elite %s"
-
-	--[[
-
-	[CastTime]
-	SPELL_RECAST_TIME_CHARGEUP_INSTANT = "Instant"
-	SPELL_CAST_TIME_INSTANT = "Instant"
-	SPELL_CAST_TIME_INSTANT_NO_MANA = "Instant"
-	SPELL_CAST_TIME_MIN = "%.3g min cast"
-	SPELL_CAST_TIME_SEC = "%.3g sec cast"
-
-	[CooldownTime]
-	SPELL_RECAST_TIME_INSTANT = "Instant cooldown"
-	SPELL_RECAST_TIME_DAYS = "%.3g day cooldown"
-	SPELL_RECAST_TIME_HOURS = "%.3g hour cooldown"
-	SPELL_RECAST_TIME_MIN = "%.3g min cooldown"
-	SPELL_RECAST_TIME_SEC = "%.3g sec cooldown"
-	SPELL_RECAST_TIME_CHARGES_DAYS = "%.3g day recharge"
-	SPELL_RECAST_TIME_CHARGES_HOURS = "%.3g hour recharge"
-	SPELL_RECAST_TIME_CHARGES_INSTANT = "Instant recharge"
-	SPELL_RECAST_TIME_CHARGES_MIN = "%.3g min recharge"
-	SPELL_RECAST_TIME_CHARGES_SEC = "%.3g sec recharge"
-
-	[Cooldown/Chargetime remaining]
-
-	SPELL_RECAST_TIME_CHARGEUP_DAYS = "%.3g |4day:days; required"
-	SPELL_RECAST_TIME_CHARGEUP_HOURS = "%.3g |4hour:hours; required"
-	SPELL_RECAST_TIME_CHARGEUP_MIN = "%.3g min required"
-	SPELL_RECAST_TIME_CHARGEUP_SEC = "%.3g sec required"
-
-	SPELL_RECHARGE_TIME = "Recharging: %s"
-	SPELL_RECHARGE_TIME_DAYS = "Recharging: %d |4day:days;"
-	SPELL_RECHARGE_TIME_HOURS = "Recharging: %d |4hour:hours;"
-	SPELL_RECHARGE_TIME_MIN = "Recharging: %d min"
-	SPELL_RECHARGE_TIME_SEC = "Recharging: %d sec"
-
-	COOLDOWN_REMAINING = "Cooldown remaining:"
-	ITEM_COOLDOWN_TIME = "Cooldown remaining: %s"
-	ITEM_COOLDOWN_TIME_DAYS = "Cooldown remaining: %d |4day:days;"
-	ITEM_COOLDOWN_TIME_HOURS = "Cooldown remaining: %d |4hour:hours;"
-	ITEM_COOLDOWN_TIME_MIN = "Cooldown remaining: %d min"
-	ITEM_COOLDOWN_TIME_SEC = "Cooldown remaining: %d sec"
-	]]
 
 local singlePattern = function(msg, plain)
 	msg = msg:gsub("%%%d?$?c", ".+")
@@ -187,27 +170,36 @@ local pluralPattern = function(msg, plain)
 	msg = msg:gsub("|4.+:(.+);", "%1")
 	return plain and msg or ("^" .. msg)
 end
-	
+
+-- Trying in the simplest manner possible to work around
+-- issues where the localized version of a string
+-- contains placement order values, while the enUS does not.
+local numberPattern = function(msg)
+	msg = string_gsub(msg, "%%d", "(%%d+)")
+	msg = string_gsub(msg, "%%%d%$d", "(%%d+)")
+	return msg
+end
+
 -- Will come up with a better system as this expands, 
 -- just doing it fast and simple for now.
 local Patterns = {
 
-	ContainerSlots = 			"^" .. string_gsub(string_gsub(Constants.ContainerSlots, "%%d", "(%%d+)"), "%%s", "(%.+)"),
-	ItemBlock = 				"^" .. string_gsub(string_gsub(Constants.ItemBlock, "%%d", "(%%d+)"), "%%s", "(%%w)"),
+	ContainerSlots = 			"^" .. string_gsub(numberPattern(Constants.ContainerSlots), "%%s", "(%.+)"),
+	ItemBlock = 				"^" .. string_gsub(numberPattern(Constants.ItemBlock), "%%s", "(%%w)"),
 	ItemDamage = 				"^" .. string_gsub(string_gsub(Constants.ItemDamage, "%%s", "(%%d+)"), "%-", "%%-"),
-	ItemDurability = 			"^" .. string_gsub(Constants.ItemDurability, "%%d", "(%%d+)"),
-	ItemLevel = 				"^" .. string_gsub(Constants.ItemLevel, "%%d", "(%%d+)"),
+	ItemDurability = 			"^" .. numberPattern(Constants.ItemDurability),
+	ItemLevel = 				"^" .. numberPattern(Constants.ItemLevel),
 	Level = 						   Constants.Level,
 
 	-- For aura scanning
-	AuraTimeRemaining1 =  			   singlePattern(_G.SPELL_TIME_REMAINING_DAYS),
-	AuraTimeRemaining2 = 			   singlePattern(_G.SPELL_TIME_REMAINING_HOURS),
-	AuraTimeRemaining3 = 			   singlePattern(_G.SPELL_TIME_REMAINING_MIN),
-	AuraTimeRemaining4 = 			   singlePattern(_G.SPELL_TIME_REMAINING_SEC),
-	AuraTimeRemaining5 = 			   pluralPattern(_G.SPELL_TIME_REMAINING_DAYS),
-	AuraTimeRemaining6 = 			   pluralPattern(_G.SPELL_TIME_REMAINING_HOURS),
-	AuraTimeRemaining7 = 			   pluralPattern(_G.SPELL_TIME_REMAINING_MIN),
-	AuraTimeRemaining8 = 			   pluralPattern(_G.SPELL_TIME_REMAINING_SEC),
+	AuraTimeRemaining1 =  			   singlePattern(SPELL_TIME_REMAINING_DAYS),
+	AuraTimeRemaining2 = 			   singlePattern(SPELL_TIME_REMAINING_HOURS),
+	AuraTimeRemaining3 = 			   singlePattern(SPELL_TIME_REMAINING_MIN),
+	AuraTimeRemaining4 = 			   singlePattern(SPELL_TIME_REMAINING_SEC),
+	AuraTimeRemaining5 = 			   pluralPattern(SPELL_TIME_REMAINING_DAYS),
+	AuraTimeRemaining6 = 			   pluralPattern(SPELL_TIME_REMAINING_HOURS),
+	AuraTimeRemaining7 = 			   pluralPattern(SPELL_TIME_REMAINING_MIN),
+	AuraTimeRemaining8 = 			   pluralPattern(SPELL_TIME_REMAINING_SEC),
 
 	-- Total Cast Time
 	CastTime1 = 				"^" .. Constants.CastInstant, 
@@ -215,10 +207,14 @@ local Patterns = {
 	CastTime3 = 				"^" .. string_gsub(Constants.CastTimeMin, "%%%.%dg", "(%.+)"),
 	CastTime4 = 				"^" .. Constants.CastChanneled, 
 
+	-- On next swing/attack
+	CastQueue1 = 				"^" .. Constants.CastNextMelee, 
+	CastQueue2 = 				"^" .. Constants.CastNextRanged, 
+
 	-- CooldownRemaining
-	CooldownTimeRemaining1 = 		   string_gsub(Constants.CooldownTimeRemaining1, "%%d", "(%%d+)"), 
-	CooldownTimeRemaining2 = 		   string_gsub(Constants.CooldownTimeRemaining2, "%%d", "(%%d+)"), 
-	CooldownTimeRemaining3 = 		   string_gsub(Constants.CooldownTimeRemaining3, "%%d", "(%%d+)"), 
+	CooldownTimeRemaining1 = 		   numberPattern(Constants.CooldownTimeRemaining1), 
+	CooldownTimeRemaining2 = 		   numberPattern(Constants.CooldownTimeRemaining2), 
+	CooldownTimeRemaining3 = 		   numberPattern(Constants.CooldownTimeRemaining3), 
 
 	-- Item binds 
 	ItemBind1 = 				"^" .. Constants.ItemBoundSoul, 
@@ -234,16 +230,16 @@ local Patterns = {
 	-- Item unique status
 	ItemUnique1 = 				"^" .. Constants.ItemUnique,
 	ItemUnique2 = 				"^" .. Constants.ItemUniqueEquip,
-	ItemUnique3 = 				"^" .. string_gsub(Constants.ItemUniqueMultiple, "%%d", "(%%d+)"),
+	ItemUnique3 = 				"^" .. numberPattern(Constants.ItemUniqueMultiple),
 
 	-- Item effects
 	ItemEquipEffect = 			"^" .. Constants.ItemEquipEffect, 
 	ItemUseEffect = 			"^" .. Constants.ItemUseEffect, 
 
 	-- Recharge Remaining
-	RechargeTimeRemaining1 = 	"^" .. string_gsub(Constants.RechargeTimeRemaining1, "%%d", "(%%d+)"), 
-	RechargeTimeRemaining2 = 	"^" .. string_gsub(Constants.RechargeTimeRemaining2, "%%d", "(%%d+)"), 
-	RechargeTimeRemaining3 = 	"^" .. string_gsub(Constants.RechargeTimeRemaining3, "%%d", "(%%d+)"), 
+	RechargeTimeRemaining1 = 	"^" .. numberPattern(Constants.RechargeTimeRemaining1), 
+	RechargeTimeRemaining2 = 	"^" .. numberPattern(Constants.RechargeTimeRemaining2), 
+	RechargeTimeRemaining3 = 	"^" .. numberPattern(Constants.RechargeTimeRemaining3), 
 	
 	-- Spell Range
 	Range1 = 					"^" .. Constants.RangeMelee,
@@ -251,15 +247,34 @@ local Patterns = {
 	Range3 = 					"^" .. Constants.RangeCaster, 
 	Range4 = 					"^" .. string_gsub(Constants.RangeSpell, "%%s", "(%.+)"),
 
+	-- Power Types for Spell Cost 
+	PowerType1 = 				"^(.+)" .. Constants.PowerType1,
+	PowerType2 = 				"^(.+)" .. Constants.PowerType2,
+	PowerType3 = 				"^(.+)" .. Constants.PowerType3,
+	PowerType4 = 				"^(.+)" .. Constants.PowerType4,
+
 	-- Spell Requirements
 	SpellRequiresForm = 			   "(" .. (string_gsub(Constants.SpellRequiresForm, "%%s", "(.+)")) .. ")", 
 
+	-- Skinnables
+	UnitSkinnable1 = 			"^" .. Constants.UnitSkinnable1,
+	UnitSkinnable2 = 			"^" .. Constants.UnitSkinnable2,
+	UnitSkinnable3 = 			"^" .. Constants.UnitSkinnable3,
+	UnitSkinnable4 = 			"^" .. Constants.UnitSkinnable4
 }
 
 local isPrimaryStat = {
 	ITEM_MOD_STRENGTH_SHORT = true,
 	ITEM_MOD_AGILITY_SHORT = true,
 	ITEM_MOD_INTELLECT_SHORT = true,
+	ITEM_MOD_SPIRIT_SHORT = true
+}
+
+local sorted1stStats = {
+	"ITEM_MOD_STRENGTH_SHORT",
+	"ITEM_MOD_AGILITY_SHORT",
+	"ITEM_MOD_INTELLECT_SHORT",
+	"ITEM_MOD_SPIRIT_SHORT"
 }
 
 local isSecondaryStat = {
@@ -272,11 +287,12 @@ local isSecondaryStat = {
 	ITEM_MOD_CR_AVOIDANCE_SHORT = true, 
 	ITEM_MOD_CR_SPEED_SHORT = true, 
 
+	ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = true,
 	ITEM_MOD_DODGE_RATING_SHORT = true, 
 	ITEM_MOD_PARRY_RATING_SHORT = true, 
 
 	ITEM_MOD_BLOCK_VALUE_SHORT = true, 
-	ITEM_MOD_BLOCK_RATING_SHORT = true, 
+	ITEM_MOD_BLOCK_RATING_SHORT = true
 }
 
 local sorted2ndStats = {
@@ -289,11 +305,12 @@ local sorted2ndStats = {
 	"ITEM_MOD_CR_AVOIDANCE_SHORT", 
 	"ITEM_MOD_CR_SPEED_SHORT", 
 
+	"ITEM_MOD_DEFENSE_SKILL_RATING_SHORT",
 	"ITEM_MOD_DODGE_RATING_SHORT", 
 	"ITEM_MOD_PARRY_RATING_SHORT", 
 
 	"ITEM_MOD_BLOCK_VALUE_SHORT", 
-	"ITEM_MOD_BLOCK_RATING_SHORT",
+	"ITEM_MOD_BLOCK_RATING_SHORT"
 }
 
 -- Utility Functions
@@ -308,18 +325,33 @@ local check = function(value, num, ...)
 	end
 	local types = string_join(", ", ...)
 	local name = string_match(debugstack(2, 2, 0), ": in function [`<](.-)['>]")
-	error(("Bad argument #%.0f to '%s': %s expected, got %s"):format(num, name, types, type(value)), 3)
+	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
--- Check if a given itemLink is a caged battle pet
-local GetBattlePetInfo = function(itemLink)
-	if (not string_find(itemLink, "battlepet")) then
-		return
-	end
-	local data, name = string_match(itemLink, "|H(.-)|h(.-)|h")
-	local  _, _, level, rarity = string_match(data, "(%w+):(%d+):(%d+):(%d+)")
-	return true, level or 1, tonumber(rarity) or 0
+-- Clear the scanner tooltip
+local ClearScanner = function()
+	Scanner:Hide()
+	Scanner.owner = UIParent
+	Scanner:SetOwner(UIParent, "ANCHOR_NONE")
 end
+
+-- Just to avoid empty tables being sent back, causing bugs.
+local validateResults = function(data)
+	local hasContent
+	for i in pairs(data) do
+		return data -- any content at all will lead us here
+	end
+	return nil -- nothing existed, do not return the data table
+end
+
+-- Strip away superfluous space
+local clearSpace = function(msg)
+	if (msg) then
+		msg = string_gsub(msg, "^(%s+)", "")
+		msg = string_gsub(msg, "(%s+)$", "")
+	end
+	return msg
+end 
 
 -- Library API
 ---------------------------------------------------------
@@ -328,10 +360,50 @@ end
 -- *Methods can provide an optional table
 --  to be populated by the retrieved data.
 
+LibTooltipScanner.IsActionItem = function(self, actionSlot, tbl)
+	if HasAction(actionSlot) then 
+		local actionType, id = GetActionInfo(actionSlot)
+		if (actionType == "item") then 
+			return true
+
+		elseif (actionType == "macro") then 
+			ClearScanner()
+
+			Scanner:SetAction(actionSlot)
+
+			local numLines = Scanner:NumLines() 
+			for lineIndex = 2, (numLines < 4) and numLines or 4 do 
+				local line = _G[ScannerName.."TextLeft"..lineIndex]
+				if (line) then 
+					local msg = line:GetText()
+
+					-- item binds
+					local id = 1
+					while Patterns["ItemBind"..id] do 
+						if (string_find(msg, Patterns["ItemBind"..id])) then 
+							return true
+						end 
+						id = id + 1
+					end 
+
+					-- item unique stats
+					if (not isMacroItem) then
+						id = 1
+						while Patterns["ItemUnique"..id] do 
+							if (string_find(msg, Patterns["ItemUnique"..id])) then 
+								return true
+							end 
+							id = id + 1
+						end 
+					end
+				end
+			end
+		end
+	end
+end
+
 LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	--  Blizz Action Tooltip Structure: 
 	--  *the order is consistent, bracketed elements optional
@@ -350,8 +422,7 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 	if HasAction(actionSlot) then 
 
 		-- Switch to action item function if the action contains an item
-		local actionType, id = GetActionInfo(actionSlot)
-		if (actionType == "item") then 
+		if (self:IsActionItem(actionSlot)) then 
 			return self:GetTooltipDataForActionItem(actionSlot)
 		end 
 
@@ -402,6 +473,59 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 			end 
 		end
 
+		if (tbl.name == ATTACK) then 
+			tbl.isAutoAttack = true 
+
+			local speed, offhandSpeed = UnitAttackSpeed("player")
+			local minDamage
+			local maxDamage
+			local minOffHandDamage
+			local maxOffHandDamage 
+			local physicalBonusPos
+			local physicalBonusNeg
+			local percent
+			minDamage, maxDamage, minOffHandDamage, maxOffHandDamage, physicalBonusPos, physicalBonusNeg, percent = UnitDamage("player")
+			local displayMin = max(floor(minDamage),1)
+			local displayMax = max(ceil(maxDamage),1)
+		
+			minDamage = (minDamage / percent) - physicalBonusPos - physicalBonusNeg
+			maxDamage = (maxDamage / percent) - physicalBonusPos - physicalBonusNeg
+		
+			local baseDamage = (minDamage + maxDamage) * 0.5
+			local fullDamage = (baseDamage + physicalBonusPos + physicalBonusNeg) * percent
+			local totalBonus = (fullDamage - baseDamage)
+			local damagePerSecond = (max(fullDamage,1) / speed)
+		
+			-- If there's an offhand speed then add the offhand info to the tooltip
+			local offhandAttackSpeed, offhandDps
+			if ( offhandSpeed ) then
+				minOffHandDamage = (minOffHandDamage / percent) - physicalBonusPos - physicalBonusNeg
+				maxOffHandDamage = (maxOffHandDamage / percent) - physicalBonusPos - physicalBonusNeg
+
+				local offhandBaseDamage = (minOffHandDamage + maxOffHandDamage) * 0.5
+				local offhandFullDamage = (offhandBaseDamage + physicalBonusPos + physicalBonusNeg) * percent
+				local offhandDamagePerSecond = (max(offhandFullDamage,1) / offhandSpeed)
+
+				offhandAttackSpeed = offhandSpeed
+				offhandDps = offhandDamagePerSecond
+			end 
+
+			-- INVTYPE_WEAPONMAINHAND
+			tbl.attackSpeed = string_format("%.2f", speed)
+			tbl.attackMinDamage = string_format("%.0f", minDamage)
+			tbl.attackMaxDamage = string_format("%.0f", maxDamage)
+			tbl.attackDPS = string_format("%.1f", damagePerSecond)
+
+			-- INVTYPE_WEAPONOFFHAND
+			if (offhandSpeed) then
+				tbl.attackSpeedOffHand = string_format("%.2f", offhandAttackSpeed)
+				tbl.attackMinDamageOffHand = string_format("%.0f", minOffHandDamage)
+				tbl.attackMaxDamageOffHand = string_format("%.0f", maxOffHandDamage)
+				tbl.attackDPSOffHand = string_format("%.1f", offhandDps)
+			end
+
+			return validateResults(tbl)
+		end 
 
 		-- Spell school / Spell Type (could be "Racial")
 		right = _G[ScannerName.."TextRight1"]
@@ -423,9 +547,9 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 		local lastInfoLine = 1 -- The last line where information exists
 
 		-- Iterate available lines for action information
-		for lineIndex = 2, (numLines < 4) and numLines or 4  do 
+		for lineIndex = 2, (numLines < 4) and numLines or 4 do 
 
-			left, right = _G[ScannerName.."TextLeft"..lineIndex],  _G[ScannerName.."TextRight"..lineIndex]
+			left, right = _G[ScannerName.."TextLeft"..lineIndex], _G[ScannerName.."TextRight"..lineIndex]
 			if (left and right) then 
 
 				local leftMsg, rightMsg = left:GetText(), right:GetText()
@@ -483,11 +607,44 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 						end 
 					end 
 
-					--if (string_find(msg, Patterns.CooldownRemaining)) then 
-					--end 
+					-- search for attacks on next swing
+					if (not foundCastTime) then 
+						local id = 1
+						while Patterns["CastQueue"..id] do 
+							if (string_find(leftMsg, Patterns["CastQueue"..id])) then 
 
-					--if (string_find(msg, SPELL_RECHARGE_TIME)) then 
-					--end 
+								-- found the range line
+								foundCastTime = lineIndex
+								tbl.castTime = leftMsg
+
+								if (lastInfoLine < foundCastTime) then 
+									lastInfoLine = foundCastTime
+								end 
+
+								-- if there is something on the right side, it's the total cooldown
+								if (rightMsg and (rightMsg ~= "")) then 
+									foundCooldownTime = foundCooldownTime
+									tbl.cooldownTime = rightMsg
+								end  
+
+								-- The cost is usually listed on the line before these
+								if (not foundCost) then 
+									local costLineID = lineIndex - 1
+									local costLine = _G[ScannerName.."TextLeft"..costLineID]
+									if costLine then 
+										local costLineMsg = costLine and costLine:GetText()
+										if (costLineMsg and (costLineMsg ~= "")) then 
+											foundCost = costLineID
+											tbl.spellCost = costLineMsg
+										end 
+									end 
+								end 
+
+								break
+							end 
+							id = id + 1
+						end 
+					end 
 
 					if not(foundUnmetRequirement or foundRequirement) and string_find(leftMsg, Patterns.SpellRequiresForm) then 
 						local r, g, b = left:GetTextColor()
@@ -554,7 +711,7 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 						local id = 1
 						while Patterns["Range"..id] do 
 							if (string_find(rightMsg, Patterns["Range"..id])) then 
-							
+						
 								-- found the range line
 								foundRange = lineIndex
 								tbl.spellRange = rightMsg
@@ -564,10 +721,12 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 								end 
 	
 								-- if there is something on the left side, it's the cost
-								if (leftMsg and (leftMsg ~= "")) then 
-									foundCost = lineIndex
-									tbl.spellCost = leftMsg
-								end  
+								if (not foundCost) then 
+									if (leftMsg and (leftMsg ~= "")) then 
+										foundCost = lineIndex
+										tbl.spellCost = leftMsg
+									end 
+								end 
 
 								break
 							end 
@@ -579,6 +738,35 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 
 			end 
 		end
+
+		-- Costs sometimes elude our previous filters. 
+		if (not foundCost) then 
+			for lineIndex = 2, (numLines < 4) and numLines or 4  do
+				left = _G[ScannerName.."TextLeft"..lineIndex]
+				if (left) then 
+					local leftMsg = left:GetText()
+					if (leftMsg and (leftMsg ~= "")) then 
+						-- We're working under the assumption that only range and 
+						-- resource cost is displayed with an integer and a text.
+						-- The range can only be written in a few ways, and is easy to find,
+						-- meaning if there is no range, or the range is on another line,
+						-- this instance matching that search pattern should be the cost.
+						local cost,type = string_match(leftMsg, "^(%d+)%s(.+)$")
+						if (cost and type) and (not foundRange or foundRange ~= lineIndex) then
+						
+							-- found the cost line
+							foundCost = lineIndex
+							tbl.spellCost = leftMsg
+						end
+					end
+				end
+				-- Need to break here, or it will keep on parsing 
+				-- and use faulty lines as the spell cost. (e.g. Omen of Clarity, this bugged out)
+				if (foundCost) then 
+					break
+				end
+			end
+		end 
 
 		-- Just assume all remaining lines are description, 
 		-- and bunch them together to a single line. 
@@ -602,16 +790,16 @@ LibTooltipScanner.GetTooltipDataForAction = function(self, actionSlot, tbl)
 			end 
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end 
 
 end
 
 -- Special combo variant that returns item info from an action slot
+-- We'll truncate the info a bit here to make it feel more like a spell
+-- and less like an item. Full item details will be included in pure item methods.
 LibTooltipScanner.GetTooltipDataForActionItem = function(self, actionSlot, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	--  Blizz Action Tooltip Structure: 
 	--  *the order is consistent, bracketed elements optional
@@ -644,13 +832,9 @@ LibTooltipScanner.GetTooltipDataForActionItem = function(self, actionSlot, tbl)
 		local itemName, _itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, iconFileDataID, itemSellPrice, itemClassID, itemSubClassID, bindType, expacID, itemSetID, isCraftingReagent = GetItemInfo(itemLink)
 
 		local effectiveLevel, previewLevel, origLevel = GetDetailedItemLevelInfo(itemLink)
-		local isBattlePet, battlePetLevel, battlePetRarity = GetBattlePetInfo and GetBattlePetInfo(itemLink)
 
 		local itemStats = GetItemStats(itemLink)
-
-		local spec = GetSpecialization and GetSpecialization()
-		local role = GetSpecializationRole and GetSpecializationRole(spec)
-		local primaryStat = GetSpecializationInfo and select(6, GetSpecializationInfo(spec, nil, nil, nil, UnitSex("player")))
+		local primaryStat
 
 		tbl.itemName = itemName -- localized
 		tbl.itemID = tonumber(string_match(itemLink, "item:(%d+)"))
@@ -666,13 +850,12 @@ LibTooltipScanner.GetTooltipDataForActionItem = function(self, actionSlot, tbl)
 		tbl.itemSubClassID = itemSubClassID
 		tbl.itemBindType = bindType 
 		tbl.itemSetID = itemSetID
-		tbl.isBattlePet = isBattlePet
 		tbl.isCraftingReagent = isCraftingReagent
 		tbl.itemArmor = itemStats and tonumber(itemStats.RESISTANCE0_NAME)
-		tbl.itemStamina = itemStats and tonumber(itemStats.ITEM_MOD_STRENGTH_SHORT)
+		tbl.itemStamina = itemStats and tonumber(itemStats.ITEM_MOD_STAMINA_SHORT)
 		tbl.itemDPS = itemStats and tonumber(itemStats.ITEM_MOD_DAMAGE_PER_SECOND_SHORT)
-		tbl.uselessStats = {}
-		tbl.secondaryStats = {}	
+		tbl.primaryStats = {}
+		tbl.secondaryStats = {}
 
 		local primaryKey
 		if (primaryStat == LE_UNIT_STAT_STRENGTH) then 
@@ -693,7 +876,7 @@ LibTooltipScanner.GetTooltipDataForActionItem = function(self, actionSlot, tbl)
 		if itemStats then
 			for key,value in pairs(itemStats) do 
 				if (isPrimaryStat[key] and (key ~= primaryKey)) then 
-					tbl.uselessStats[key] = value
+					tbl.primaryStats[key] = value
 				end 
 				if (isSecondaryStat[key]) then 
 					tbl.secondaryStats[key] = value
@@ -920,15 +1103,12 @@ LibTooltipScanner.GetTooltipDataForActionItem = function(self, actionSlot, tbl)
 			end 
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end 
 end 
 
 LibTooltipScanner.GetTooltipDataForPetAction = function(self, actionSlot, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
-
+	ClearScanner()
 
 	local name, texture, isToken, isActive, autoCastAllowed, autoCastEnabled, spellID = GetPetActionInfo(actionSlot)
 	if name then 
@@ -1140,14 +1320,12 @@ LibTooltipScanner.GetTooltipDataForPetAction = function(self, actionSlot, tbl)
 			end 
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end
 end
 
 LibTooltipScanner.GetTooltipDataForSpellID = function(self, spellID, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	if (spellID and DoesSpellExist(spellID)) then 
 		Scanner:SetSpellByID(spellID)
@@ -1369,15 +1547,13 @@ LibTooltipScanner.GetTooltipDataForSpellID = function(self, spellID, tbl)
 
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end 
 
 end
 
 LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	if UnitExists(unit) then 
 		Scanner:SetUnit(unit)
@@ -1389,20 +1565,22 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 
 		-- Retrieve generic data
 		local isPlayer = UnitIsPlayer(unit)
-		local isBattlePet = UnitIsBattlePetCompanion and UnitIsBattlePetCompanion(unit)
-		local isWildPet = UnitIsWildBattlePet and UnitIsWildBattlePet(unit)
 		local unitLevel = UnitLevel(unit)
-		local unitEffectiveLevel = UnitEffectiveLevel and UnitEffectiveLevel(unit) or unitLevel
+		local UnitEffectiveLevel = UnitEffectiveLevel(unit)
 		local unitName, unitRealm = UnitName(unit)
-		local isDead = UnitIsDead(unit) or UnitIsGhost(unit)
+		local isDead = UnitIsDead(unit)
+		local isGhost = UnitIsGhost(unit)
 
 		-- Generic stuff
 		tbl.name = unitName
+		tbl.isDead = isDead or isGhost
+		tbl.isGhost = isGhost
+		tbl.isPlayer = isPlayer
 
 		-- Retrieve special data from the tooltip
 
 		-- Players
-		if isPlayer then 
+		if (isPlayer) then 
 			local classDisplayName, class, classID = UnitClass(unit)
 			local englishFaction, localizedFaction = UnitFactionGroup(unit)
 			local guildName, guildRankName, guildRankIndex, realm = GetGuildInfo(unit)
@@ -1415,14 +1593,29 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 			local pvpName = UnitPVPName(unit)
 			local inParty = UnitInParty(unit)
 			local inRaid = UnitInRaid(unit)
-			local uiMapID = (inParty or inRaid) and GetBestMapForUnit(unit)
+			local uiMapID = (inParty or inRaid) and GetBestMapForUnit and GetBestMapForUnit(unit)
+			local pvpRankName, pvpRankNumber
 
-			tbl.isPlayer = isPlayer
+			if (GetPVPRankInfo) and (UnitPVPRank) then
+				pvpRankName, pvpRankNumber = GetPVPRankInfo(UnitPVPRank(unit))
+			end
+
+			-- Correct the rank names according to faction,
+			-- as the above function only returns the names
+			-- of your own faction's PvP ranks.
+			if (pvpRankNumber and pvpRanks[pvpRankNumber]) then
+				if (englishFaction == "Horde") then
+					pvpRankName = pvpRanks[pvpRankNumber][1]
+				elseif (englishFaction == "Alliance") then 
+					pvpRankName = pvpRanks[pvpRankNumber][2]
+				end
+			end
+
 			tbl.playerFaction = englishFaction
 			tbl.englishFaction = englishFaction
 			tbl.localizedFaction = localizedFaction
 			tbl.level = unitLevel
-			tbl.effectiveLevel = unitEffectiveLevel or unitLevel
+			tbl.effectiveLevel = UnitEffectiveLevel
 			tbl.guild = guildName
 			tbl.classDisplayName = classDisplayName
 			tbl.class = class
@@ -1437,50 +1630,26 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 			tbl.isPVP = isPVP
 			tbl.isFFA = isFFA
 			tbl.pvpName = pvpName
+			tbl.pvpRankName = pvpRankName
+			tbl.pvpRankNumber = pvpRankNumber
 			tbl.inParty = inParty
 			tbl.inRaid = inRaid
 			tbl.uiMapID = uiMapID
 	
-		-- Vanity-, wild- and battle pets
-		elseif (isWildPet or isBattlePet) then 
-
-			local battlePetLevel = UnitBattlePetLevel(unit)
-			local reaction = UnitReaction(unit, "player")
-
-			tbl.isPet = true
-			tbl.level = battlePetLevel
-			tbl.effectiveLevel = battlePetLevel
-
-			local line = _G[ScannerName.."TextLeft1"]
-			if line then 
-				msg = line:GetText()
-				if msg then 
-					msg = string_lower(msg)
-					if string_find(msg, "^|cff") then 
-						local color = string_sub(msg, 3, 10)
-						if color then 
-							for i,colors in ipairs(ITEM_QUALITY_COLORS) do 
-								if (colors.color:GenerateHexColor() == color) then 
-									tbl.petRarity = i + 1
-									tbl.rarity = i
-									break
-								end 
-							end 
-						end 
-					end 
-				end 
-			end 
-
 		-- NPCs
 		else 
+
+			local englishFaction, localizedFaction = UnitFactionGroup(unit)
 			local reaction = UnitReaction(unit, "player")
 			local classification = UnitClassification(unit)
-			if (unitLevel < 0) or (unitEffectiveLevel < 0) then
+			if (unitLevel < 0) then
 				classification = "worldboss"
 			end
 	
+			tbl.englishFaction = englishFaction
+			tbl.localizedFaction = localizedFaction
 			tbl.level = unitLevel
-			tbl.effectiveLevel = unitEffectiveLevel or unitLevel
+			tbl.effectiveLevel = unitLevel
 			tbl.classification = classification
 			tbl.creatureFamily = UnitCreatureFamily(unit)
 			tbl.creatureType = UnitCreatureType(unit)
@@ -1490,6 +1659,7 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 			-- since things are always placed in a certain order. 
 			-- We'll be able to guesstimate what the content means by this. 
 			local foundTitle, foundLevel, foundCity, foundPvP, foundLeader
+			local foundSkinnable, foundCivilian
 
 			local numLines = Scanner:NumLines()
 			for lineIndex = 2,numLines do 
@@ -1497,7 +1667,7 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 				if line then 
 					local msg = line:GetText()
 					if msg then 
-						if (string_find(msg, Patterns.Level) and (not string_find(msg, Patterns.ItemLevel))) then 
+						if (string_find(msg, Patterns.Level)) then 
 
 							foundLevel = lineIndex
 
@@ -1507,8 +1677,14 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 								tbl.title = _G[ScannerName.."TextLeft"..foundTitle]:GetText()
 							end 
 						end 
+
+						if (msg == PVP_RANK_CIVILIAN) and (not foundCivilian) then 
+							tbl.isCivilian = true
+							tbl.civilianColor = { line:GetTextColor() }
+							foundCivilian = lineIndex
+						end
 			
-						if (msg == PVP_ENABLED) then
+						if (msg == PVP_ENABLED) and (not foundPvP) then
 							tbl.isPvPEnabled = true
 							foundPvP = lineIndex
 
@@ -1522,21 +1698,201 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 						if (msg == FACTION_ALLIANCE) or (msg == FACTION_HORDE) then
 							tbl.localizedFaction = msg
 						end
+
+						-- search for range
+						if (not foundSkinnable) then 
+							local id = 1
+							while Patterns["UnitSkinnable"..id] do 
+								if (string_find(msg, Patterns["UnitSkinnable"..id])) then 
+								
+									-- found the range line
+									foundSkinnable = lineIndex
+									tbl.skinnableMsg = msg
+									tbl.skinnableColor = { line:GetTextColor() }
+									tbl.isSkinnable = true
+									break
+								end 
+								id = id + 1
+							end 
+						end 
+
 					end 
 				end 
 			end 
 		end 
 
-		return tbl
+		-- Textures
+		local objectives = {}
+		local objectiveID
+		local currentObjectiveLineID, currentTitleLineID
+		local textureID = 1
+		local texture = _G[ScannerName .. "Texture" .. textureID]
+
+		while (texture) and (texture:IsShown()) do
+			local texPath = texture:GetTexture()
+
+			local hasObjective, objectiveType
+			if (texPath == 3083385) then -- Incomplete objective
+				hasObjective = true
+				objectiveType = "incomplete"
+			elseif (texPath == 628564) then -- Completed objective
+				hasObjective = true
+				objectiveType = "complete"
+			else
+				local texID = tonumber(texPath) or 0
+				if (texID ~= 0) then
+					print(string_format("|cffffd200LibTooltipScanner:|r |cfff0f0f0Unhandled textureID |r'|cff33aa33%d|r'.", texPath))
+				end
+			end 
+
+			if (hasObjective) then
+				local _,textLine = texture:GetPoint()
+				local objectiveText = textLine:GetText()
+				local lineName, lineID = string_match(textLine:GetName(), "(.-)(%d)$")
+				lineID = tonumber(lineID)
+
+				-- Assume a new  quest if this is either the first found objective,
+				-- or if this objective has skipped a line or more since the previous objective.
+				if (not currentObjectiveLineID) or (lineID > currentObjectiveLineID + 1) then
+
+					-- Store the current quest title's lineID
+					currentTitleLineID = lineID - 1
+
+					-- Retrieve the quest title
+					local titleLine = _G[ScannerName .. "TextLeft" .. currentTitleLineID]
+					local titleText = titleLine and titleLine:GetText() -- may not always exist. "Svarnos" in Tol Barad reportedly bugs out.
+
+					-- Set a new local objective ID
+					objectiveID = #objectives + 1
+					objectives[objectiveID] = { questTitle = clearSpace(titleText or ""), questObjectives = {} }
+				end
+
+				-- Store the data we've found about this objective
+				local questObjectives = objectives[objectiveID].questObjectives
+				questObjectives[#questObjectives + 1] = {
+					objectiveType = objectiveType,
+					objectiveText = clearSpace(objectiveText)
+				}
+
+				-- Store or update the current objective's lineID
+				currentObjectiveLineID = lineID
+			end
+
+			-- Update the current texture
+			textureID = textureID + 1
+			texture = _G[ScannerName .. "Texture" .. textureID]
+		end
+
+		-- Check for Questie data
+		if (IsClassic) and (Questie) then
+
+			-- Only do this if the Questie
+			-- tooltip option is enabled(?)
+			if (Questie.db.global.enableTooltips) then
+				local guid = UnitGUID(unit)
+				if (guid) then
+					local type, zero, server_id, instance_id, zone_uid, npc_id, spawn_uid = string_split("-", guid or "")
+					if (npc_id) then
+						local QuestieTooltips = QuestieLoader:ImportModule("QuestieTooltips")
+						local tooltipData = QuestieTooltips:GetTooltip("m_" .. npc_id)
+						if (tooltipData) then
+
+							for lineID,msg in pairs(tooltipData) do
+								local objectiveLevel, objectiveTitle, objectiveType
+
+								-- Questie puts a line break at the end too,
+								-- so we could potentially get an empty string here.
+								if (msg and msg ~= "") then
+
+									-- Might need this later to decide if an objective is completed or not.
+									local colorCode = string_match(msg, "|c%w%w(%w%w%w%w%w%w)")
+
+									-- Strip out color codes and clutter
+									msg = string_gsub(msg, "|c%w%w%w%w%w%w%w%w", "")
+									msg = string_gsub(msg, "|r", "")
+									msg = string_gsub(msg, " $", "")
+									msg = string_gsub(msg, "^ ", "")
+									msg = string_gsub(msg, "%.$", "")
+									msg = string_gsub(msg, "%?$", "")
+									msg = string_gsub(msg, "%!$", "")
+
+
+									-- Extract level if possible
+									local objectiveLevel, objectiveTitle = string_match(msg, "%[(.+)%] (.+)") -- level can have + in it, for elites!
+									if (objectiveLevel and objectiveTitle) then
+
+										-- Set a new local objective ID
+										objectiveID = #objectives + 1
+										objectives[objectiveID] = { 
+											questTitle = objectiveTitle, 
+											questLevel = objectiveLevel, 
+											questObjectives = {} 
+										}
+
+									else
+
+										-- Figure out the objective
+										local minCount, maxCount, description = string_match(msg, "(%d+)/(%d+) (.+)")
+										minCount = tonumber(minCount)
+										maxCount = tonumber(maxCount)
+
+										if (description and minCount and maxCount) then
+											-- Might seem a bit redundant
+											description = string_format("%d/%d %s", minCount, maxCount, description)
+
+											if (minCount == maxCount) then
+												objectiveType = "complete"
+											else
+												objectiveType = "incomplete"
+											end
+										else
+											description = msg
+
+											-- We'll be needing the color here(?)
+											if (false) then
+												objectiveType = "complete"
+											else
+												objectiveType = "incomplete"
+											end
+										end
+
+										-- Store the data we've found about this objective
+										-- *Only way the quest objectives table can be missing,
+										-- is if we failed to identiy the title line previously.
+										-- This happened once with elite quests, though,
+										-- so I'm adding this little check just to avoid lua bugs.
+										if (objectiveID) and (objectives[objectiveID]) then
+											local questObjectives = objectives[objectiveID].questObjectives
+											questObjectives[#questObjectives + 1] = {
+												objectiveType = objectiveType,
+												objectiveText = description
+											}
+										end
+
+									end
+
+								end
+							
+								
+							end
+						end
+					end
+				end
+			end
+		end
+
+		if (objectiveID) then
+			tbl.objectives = objectives
+		end
+
+		return validateResults(tbl)
 	end 
 end
 
 -- Will only return generic data based on mere itemID, no special instances of the item.
 -- This is basically just a proxy for GetTooltipDataForItemLink. 
 LibTooltipScanner.GetTooltipDataForItemID = function(self, itemID, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local itemName, _itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, iconFileDataID, itemSellPrice, itemClassID, itemSubClassID, bindType, expacID, itemSetID, isCraftingReagent = GetItemInfo(itemID)
 
@@ -1546,11 +1902,10 @@ LibTooltipScanner.GetTooltipDataForItemID = function(self, itemID, tbl)
 end
 
 -- Returns specific data for the specific itemLink
+-- TODO: Add in everything from GetTooltipDataForActionItem()
+-- TODO: Add in scanning for sets, enchants, and descriptions. 
 LibTooltipScanner.GetTooltipDataForItemLink = function(self, itemLink, tbl)
-
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local itemName, _itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, iconFileDataID, itemSellPrice, itemClassID, itemSubClassID, bindType, expacID, itemSetID, isCraftingReagent = GetItemInfo(itemLink)
 
@@ -1564,46 +1919,24 @@ LibTooltipScanner.GetTooltipDataForItemLink = function(self, itemLink, tbl)
 
 		-- Get some blizzard info about the current item
 		local effectiveLevel, previewLevel, origLevel = GetDetailedItemLevelInfo(itemLink)
-		local isBattlePet, battlePetLevel, battlePetRarity = GetBattlePetInfo(itemLink)
 
 		tbl.itemID = tonumber(string_match(itemLink, "item:(%d+)"))
 		tbl.itemString = string_match(itemLink, "item[%-?%d:]+")
 		tbl.itemName = itemName
 		tbl.itemRarity = itemRarity
-		tbl.isBattlePet = isBattlePet
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
-		tbl.xxxx = xxxx
+		tbl.itemSellPrice = itemSellPrice
+		tbl.itemStackCount = itemStackCount
 
-		return tbl
+		return validateResults(tbl)
 	end 
 end
 
--- Returns data about the exact bag- or bank slot. Will return all current mofidications.
+-- Returns data about the exact bag- or bank slot. Will return all current modifications.
 LibTooltipScanner.GetTooltipDataForContainerSlot = function(self, bagID, slotID, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local itemID = GetContainerItemID(bagID, slotID)
-	if itemID then 
+	if (itemID) then 
 		local hasCooldown, repairCost = Scanner:SetBagItem(bagID, slotID)
 
 		tbl = tbl or {}
@@ -1611,17 +1944,18 @@ LibTooltipScanner.GetTooltipDataForContainerSlot = function(self, bagID, slotID,
 			tbl[i] = nil
 		end 
 
+		local itemLink = GetContainerItemLink(bagID, slotID)
 
-		return tbl
+
+
+		return validateResults(tbl)
 	end 
 
 end
 
--- Returns data about the exact guild bank slot. Will return all current mofidications.
+-- Returns data about the exact guild bank slot. Will return all current modifications.
 LibTooltipScanner.GetTooltipDataForGuildBankSlot = function(self, tabID, slotID, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local itemLink = GetGuildBankItemInfo(tabID, slotID)
 	if itemLink then 
@@ -1635,15 +1969,13 @@ LibTooltipScanner.GetTooltipDataForGuildBankSlot = function(self, tabID, slotID,
 		end 
 
 
-		return tbl
+		return validateResults(tbl)
 	end 
 end
 
 -- Returns data about equipped items
 LibTooltipScanner.GetTooltipDataForInventorySlot = function(self, unit, inventorySlotID, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	-- https://wow.gamepedia.com/InventorySlotId
 	local hasItem, hasCooldown, repairCost = Scanner:SetInventoryItem(unit, inventorySlotID)
@@ -1655,15 +1987,13 @@ LibTooltipScanner.GetTooltipDataForInventorySlot = function(self, unit, inventor
 			tbl[i] = nil
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end
 end
 
 -- Returns data about mail inbox items
 LibTooltipScanner.GetTooltipDataForInboxItem = function(self, inboxID, attachIndex, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	-- https://wow.gamepedia.com/API_GameTooltip_SetInboxItem
 	-- attachIndex is in the range of [1,ATTACHMENTS_MAX_RECEIVE(16)]
@@ -1676,14 +2006,12 @@ LibTooltipScanner.GetTooltipDataForInboxItem = function(self, inboxID, attachInd
 		end 
 
 
-	return tbl
+	return validateResults(tbl)
 end
 
 -- Returns data about unit auras 
 LibTooltipScanner.GetTooltipDataForUnitAura = function(self, unit, auraID, filter, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = UnitAura(unit, auraID, filter)
 
@@ -1714,9 +2042,17 @@ LibTooltipScanner.GetTooltipDataForUnitAura = function(self, unit, auraID, filte
 		tbl.value2 = value2
 		tbl.value3 = value3
 
+		local line = _G[ScannerName.."TextRight1"]
+		if line then 
+			local msg = line:GetText()
+			if msg then
+				tbl.debuffTypeLabel = msg
+			end
+		end
+
 		local foundTimeRemaining
 		local numLines = Scanner:NumLines()
-		
+
 		for lineIndex = 2,numLines do
 			local line = _G[ScannerName.."TextLeft"..lineIndex]
 			if line then
@@ -1764,15 +2100,13 @@ LibTooltipScanner.GetTooltipDataForUnitAura = function(self, unit, auraID, filte
 			end 
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end 
 end 
 
 -- Returns data about unit buffs
 LibTooltipScanner.GetTooltipDataForUnitBuff = function(self, unit, buffID, filter, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = UnitBuff(unit, buffID, filter)
 
@@ -1784,6 +2118,7 @@ LibTooltipScanner.GetTooltipDataForUnitBuff = function(self, unit, buffID, filte
 			tbl[i] = nil
 		end 
 
+		tbl.isBuff = true
 		tbl.name = name
 		tbl.icon = icon
 		tbl.count = count
@@ -1803,6 +2138,14 @@ LibTooltipScanner.GetTooltipDataForUnitBuff = function(self, unit, buffID, filte
 		tbl.value2 = value2
 		tbl.value3 = value3
 
+		local line = _G[ScannerName.."TextRight1"]
+		if line then 
+			local msg = line:GetText()
+			if msg then
+				tbl.debuffTypeLabel = msg
+			end
+		end
+		
 		local foundTimeRemaining
 		local numLines = Scanner:NumLines()
 		
@@ -1829,7 +2172,6 @@ LibTooltipScanner.GetTooltipDataForUnitBuff = function(self, unit, buffID, filte
 			end
 		end
 
-
 		-- Just assume all remaining lines are description, 
 		-- and bunch them together to a single line. 
 		if (numLines > 1) then 
@@ -1854,15 +2196,13 @@ LibTooltipScanner.GetTooltipDataForUnitBuff = function(self, unit, buffID, filte
 			end 
 		end 
 
-		return tbl
+		return validateResults(tbl)
 	end 
 end
 
 -- Returns data about unit buffs
 LibTooltipScanner.GetTooltipDataForUnitDebuff = function(self, unit, debuffID, filter, tbl)
-	Scanner:Hide()
-	Scanner.owner = self
-	Scanner:SetOwner(self, "ANCHOR_NONE")
+	ClearScanner()
 
 	local name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = UnitDebuff(unit, debuffID, filter)
 
@@ -1893,6 +2233,14 @@ LibTooltipScanner.GetTooltipDataForUnitDebuff = function(self, unit, debuffID, f
 		tbl.value2 = value2
 		tbl.value3 = value3
 
+		local line = _G[ScannerName.."TextRight1"]
+		if line then 
+			local msg = line:GetText()
+			if msg then
+				tbl.debuffTypeLabel = msg
+			end
+		end
+		
 		local foundTimeRemaining
 		local numLines = Scanner:NumLines()
 		
@@ -1943,7 +2291,52 @@ LibTooltipScanner.GetTooltipDataForUnitDebuff = function(self, unit, debuffID, f
 			end 
 		end 
 
-		return tbl
+		return validateResults(tbl)
+	end
+end
+
+LibTooltipScanner.GetTooltipDataForTrackingSpell = function(self, tbl)
+	ClearScanner()
+
+	local trackingTexture = GetTrackingTexture()
+	if trackingTexture then 
+		Scanner:SetTrackingSpell()
+		
+		tbl = tbl or {}
+		tbl.icon = trackingTexture
+
+		local line = _G[ScannerName.."TextLeft1"]
+		if line then
+			local msg = line:GetText()
+			if msg then
+				tbl.name = msg
+			end
+		end
+
+		-- Just assume all remaining lines are description, 
+		-- and bunch them together to a single line. 
+		local numLines = Scanner:NumLines()
+		if (numLines > 1) then 
+			for lineIndex = 2, numLines do 
+				local line = _G[ScannerName.."TextLeft"..lineIndex]
+				if line then 
+					local msg = line:GetText()
+					if msg then
+						if tbl.description then 
+							if (msg == "") then 
+								tbl.description = tbl.description .. "|n|n" -- empty line/space
+							else 
+								tbl.description = tbl.description .. "|n" .. msg -- normal line break
+							end 
+						else 
+							tbl.description = msg -- first line
+						end 
+					end 
+				end 
+			end 
+		end 
+
+		return validateResults(tbl)
 	end
 end
 
@@ -1962,6 +2355,8 @@ local embedMethods = {
 	GetTooltipDataForInventorySlot = true, 
 	GetTooltipDataForInboxItem = true,
 	GetTooltipDataForSpellID = true,
+	GetTooltipDataForTrackingSpell = true,
+	IsActionItem = true
 }
 
 LibTooltipScanner.Embed = function(self, target)
