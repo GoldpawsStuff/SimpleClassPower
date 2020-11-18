@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.0.16-Release] 2019-11-18
+- Bump to WoW client patch 9.0.2.
+- Various back-end updates.
+
 ## [2.0.15-Release] 2020-10-14
 - Updated the back-end to work with WoW client patch 9.0.1! 
 

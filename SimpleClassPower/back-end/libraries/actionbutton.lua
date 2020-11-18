@@ -1,4 +1,4 @@
-local LibSecureButton = Wheel:Set("LibSecureButton", 105)
+local LibSecureButton = Wheel:Set("LibSecureButton", 127)
 if (not LibSecureButton) then
 	return
 end
@@ -28,6 +28,9 @@ end
 
 local LibSpellHighlight = Wheel("LibSpellHighlight")
 assert(LibSpellHighlight, "LibSecureButton requires LibSpellHighlight to be loaded.")
+
+local LibForge = Wheel("LibForge")
+assert(LibForge, "LibSecureButton requires LibForge to be loaded.")
 
 -- Embed functionality into this
 LibEvent:Embed(LibSecureButton)
@@ -87,11 +90,14 @@ local GetVehicleBarIndex = GetVehicleBarIndex
 local HasAction = HasAction
 local IsActionInRange = IsActionInRange
 local IsAutoCastPetAction = C_ActionBar.IsAutoCastPetAction
+local IsBindingForGamePad = IsBindingForGamePad
 local IsConsumableAction = IsConsumableAction
 local IsEnabledAutoCastPetAction = C_ActionBar.IsEnabledAutoCastPetAction
+local IsPossessBarVisible = IsPossessBarVisible
 local IsSpellOverlayed = IsSpellOverlayed
 local IsStackableAction = IsStackableAction
 local IsUsableAction = IsUsableAction
+local PetCanBeDismissed = PetCanBeDismissed
 local RegisterAttributeDriver = RegisterAttributeDriver
 local SetClampedTextureRotation = SetClampedTextureRotation
 local SetOverrideBindingClick = SetOverrideBindingClick
@@ -106,8 +112,10 @@ LibSecureButton.embeds = LibSecureButton.embeds or {}
 LibSecureButton.buttons = LibSecureButton.buttons or {} 
 LibSecureButton.allbuttons = LibSecureButton.allbuttons or {} 
 LibSecureButton.callbacks = LibSecureButton.callbacks or {} 
+LibSecureButton.rankCache = LibSecureButton.rankCache or {} -- spell rank cache to identify multiple version of same spell in Classic
 LibSecureButton.controllers = LibSecureButton.controllers or {} -- controllers to return bindings to pet battles, vehicles, etc 
 LibSecureButton.numButtons = LibSecureButton.numButtons or 0 -- total number of spawned buttons 
+LibSecureButton.disableBlizzardGlow = LibSecureButton.disableBlizzardGlow -- semantics. listing it for reference.
 
 -- Frame to securely hide items
 if (not LibSecureButton.frame) then
@@ -127,6 +135,7 @@ local AllButtons = LibSecureButton.allbuttons
 local Buttons = LibSecureButton.buttons
 local Callbacks = LibSecureButton.callbacks
 local Controllers = LibSecureButton.controllers
+local RankCache = LibSecureButton.rankCache
 local UIHider = LibSecureButton.frame
 
 -- Blizzard Textures
@@ -135,10 +144,10 @@ local EDGE_NORMAL_TEXTURE = [[Interface\Cooldown\edge]]
 local BLING_TEXTURE = [[Interface\Cooldown\star4]]
 
 -- Generic format strings for our button names
-local BUTTON_NAME_TEMPLATE_SIMPLE = "%sActionButton"
-local BUTTON_NAME_TEMPLATE_FULL = "%sActionButton%d"
-local PETBUTTON_NAME_TEMPLATE_SIMPLE = "%sPetActionButton"
-local PETBUTTON_NAME_TEMPLATE_FULL = "%sPetActionButton%d"
+local BUTTON_NAME_TEMPLATE_SIMPLE = "GP_ActionButton"
+local BUTTON_NAME_TEMPLATE_FULL = "GP_ActionButton%d"
+local PETBUTTON_NAME_TEMPLATE_SIMPLE = "GP_PetActionButton"
+local PETBUTTON_NAME_TEMPLATE_FULL = "GP_PetActionButton%d"
 
 -- Constants
 local NUM_ACTIONBAR_BUTTONS = NUM_ACTIONBAR_BUTTONS
@@ -154,7 +163,7 @@ local DAY, HOUR, MINUTE = 86400, 3600, 60
 
 local SECURE = {}
 if (IsClassic) then
-	SECURE.Page_OnAttributeChanged = string_format([=[ 
+	SECURE.Page_OnAttributeChanged = [=[ 
 		if (name == "state-page") then 
 			local page; 
 	
@@ -174,7 +183,7 @@ if (IsClassic) then
 			local buttonPage = button:GetAttribute("actionpage"); 
 			local id = button:GetID(); 
 			local actionpage = tonumber(value); 
-			local slot = actionpage and (actionpage > 1) and ((actionpage - 1)*%d + id) or id; 
+			local slot = actionpage and (actionpage > 1) and ((actionpage - 1)*12 + id) or id; 
 	
 			button:SetAttribute("actionpage", actionpage or 0); 
 			button:SetAttribute("action", slot); 
@@ -195,10 +204,10 @@ if (IsClassic) then
 				end
 			end
 		end 
-	]=])
+	]=]
 end
 if (IsRetail) then
-	SECURE.Page_OnAttributeChanged = string_format([=[ 
+	SECURE.Page_OnAttributeChanged = [=[ 
 		if (name == "state-page") then 
 			local page; 
 	
@@ -222,7 +231,7 @@ if (IsRetail) then
 			local buttonPage = button:GetAttribute("actionpage"); 
 			local id = button:GetID(); 
 			local actionpage = tonumber(value); 
-			local slot = actionpage and (actionpage > 1) and ((actionpage - 1)*%d + id) or id; 
+			local slot = actionpage and (actionpage > 1) and ((actionpage - 1)*12 + id) or id; 
 	
 			button:SetAttribute("actionpage", actionpage or 0); 
 			button:SetAttribute("action", slot); 
@@ -243,13 +252,14 @@ if (IsRetail) then
 				end
 			end
 		end 
-	]=])
+	]=]
 
 end
 
 -- Keybind abbrevations. Do not localize these.
 local ShortKey = {
 	-- Keybinds (visible on the actionbuttons)
+
 	["Alt"] = "A",
 	["Left Alt"] = "LA",
 	["Right Alt"] = "RA",
@@ -316,10 +326,33 @@ local ShortKey = {
 	["Up Arrow"] = "Up"
 }
 
+local PadKey = {
+
+}
+
 -- Hotkey abbreviations for better readability
-local getBindingKeyText = function(key)
-	if key then
+local AbbreviateBindText = function(self, key)
+	if (key) then
 		key = key:upper()
+
+		-- Let's try to hook into Blizzard's own abbreviation system.
+		-- Note that this is only temporary, we need to use icons, 
+		-- and provide a better replacement system.
+		if (key:find("PAD")) then
+			local main = key:match("%-?([%a%d]-)$")
+			if (main) then
+				
+				local full = _G["KEY_"..main]
+				local abbr = _G["KEY_ABBR_"..main]
+				local abbr_letter = _G["KEY_ABBR_"..main.."_LTR"] 
+				local abbr_shapes = _G["KEY_ABBR_"..main.."_SHP"] 
+
+				if (full and (abbr_letter or abbr_shapes or abbr)) then
+					key = key:gsub(main, abbr_letter or abbr_shapes or abbr)
+				end
+			end
+		end
+
 		key = key:gsub(" ", "")
 
 		key = key:gsub("ALT%-", ShortKey["Alt"])
@@ -377,32 +410,61 @@ local check = function(value, num, ...)
 	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
-local nameHelper = function(self, id, buttonType)
+-- Function to name buttons. 
+-- If no id is given, just the basename is returned.
+-- This is intended for other functions.
+local nameHelper = function(id, buttonType)
 	local name
-	if id then
+	if (id) then
 		if (buttonType == "pet") then 
-			name = string_format(PETBUTTON_NAME_TEMPLATE_FULL, self:GetOwner():GetName(), id)
+			name = string_format(PETBUTTON_NAME_TEMPLATE_FULL, id)
 		else 
-			name = string_format(BUTTON_NAME_TEMPLATE_FULL, self:GetOwner():GetName(), id)
+			name = string_format(BUTTON_NAME_TEMPLATE_FULL, id)
 		end
 	else 
 		if (buttonType == "pet") then 
-			name = string_format(PETBUTTON_NAME_TEMPLATE_SIMPLE, self:GetOwner():GetName())
+			name = string_format(PETBUTTON_NAME_TEMPLATE_SIMPLE)
 		else
-			name = string_format(BUTTON_NAME_TEMPLATE_SIMPLE, self:GetOwner():GetName())
+			name = string_format(BUTTON_NAME_TEMPLATE_SIMPLE)
 		end
 	end 
 	return name
 end
 
+-- Sort buttons by the buttonID and barID they were registered with.
+-- The actual IDs handled by drivers does not matter.
 local sortByID = function(a,b)
+	-- Check if both buttons exist, which for some reason isn't always true.
 	if (a) and (b) then 
-		if (a.id) and (b.id) then 
-			return (a.id < b.id)
+		-- Check for pagers, as is the case with standard actionbuttons.
+		-- Also check for their page ids, as they might not both have it.
+		if (a._pager) and (a._pager.id) and (b._pager) and (b._pager.id) then
+			-- Check if they belong to the same page id
+			if (a._pager.id == b._pager.id) then
+				-- Check for button id
+				if (a.id) and (b.id) then 
+					-- Sort by button id
+					return (a.id < b.id)
+				else
+					-- Prioritize the one that has and id, if any.
+					return a.id and true or false 
+				end 
+			else
+				-- Prioritize the lowest page id
+				return (a._pager.id < b._pager.id)
+			end
 		else
-			return a.id and true or false 
-		end 
+			-- Check for button id
+			if (a.id) and (b.id) then 
+				-- Sort by button id
+				return (a.id < b.id)
+			else
+				-- Prioritize the one that has and id, if any.
+				return a.id and true or false 
+			end 
+		end
 	else 
+		-- Prioritize the one that exists, if any.
 		return a and true or false
 	end 
 end 
@@ -428,6 +490,16 @@ local formatCooldownTime = function(time)
 		return ""
 	end	
 end
+
+local IsAddOnEnabled = function(addon)
+	for i = 1,GetNumAddOns() do
+		if (string.lower((GetAddOnInfo(i))) == string.lower(addon)) then
+			if (GetAddOnEnableState(UnitName("player"), i) ~= 0) then
+				return true
+			end
+		end
+	end
+end 
 
 -- Updates
 ----------------------------------------------------
@@ -630,7 +702,7 @@ local UpdateActionButton = function(self, event, ...)
 			end
 		end
 
-	elseif (event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW") then
+	elseif (event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW") and (not LibSecureButton.disableBlizzardGlow) then
 		local spellID = self:GetSpellID()
 		if (spellID and (spellID == arg1)) then
 			self:ShowOverlayGlow()
@@ -641,7 +713,7 @@ local UpdateActionButton = function(self, event, ...)
 			end
 		end
 
-	elseif (event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE") then
+	elseif (event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE") and (not LibSecureButton.disableBlizzardGlow) then
 		local spellID = self:GetSpellID()
 		if (spellID and (spellID == arg1)) then
 			self:HideOverlayGlow()
@@ -964,7 +1036,11 @@ ActionButton.Update = function(self)
 	self:UpdateFlyout()
 	self:UpdateSpellHighlight()
 
-	if self.PostUpdate then 
+	if (IsClassic) then
+		self:UpdateRank()
+	end
+
+	if (self.PostUpdate) then 
 		self:PostUpdate()
 	end 
 end
@@ -1098,11 +1174,28 @@ ActionButton.UpdateCooldown = function(self)
 				Cooldown.duration = nil
 				Cooldown.modRate = nil
 				SetCooldown(Cooldown, 0, 0, false)
+				local CooldownCount = self.CooldownCount
+				if (CooldownCount and CooldownCount:IsShown()) then 
+					CooldownCount:SetText("")
+					CooldownCount:Hide()
+				end
 			else 
-				Cooldown.start = start
-				Cooldown.duration = duration
-				Cooldown.modRate = modRate
-				SetCooldown(Cooldown, start, duration, enable, false, modRate)
+				if (duration > 0) then
+					Cooldown.start = start
+					Cooldown.duration = duration
+					Cooldown.modRate = modRate
+					SetCooldown(Cooldown, start, duration, enable, false, modRate)
+				else
+					Cooldown.start = nil
+					Cooldown.duration = nil
+					Cooldown.modRate = nil
+					SetCooldown(Cooldown, 0, 0, false)
+					local CooldownCount = self.CooldownCount
+					if (CooldownCount and CooldownCount:IsShown()) then 
+						CooldownCount:SetText("")
+						CooldownCount:Hide()
+					end
+				end
 			end 
 		end
 
@@ -1243,25 +1336,28 @@ ActionButton.UpdateFlyout = function(self)
 end
 
 ActionButton.UpdateGrid = function(self)
+	local alpha = 0
 	if (self:IsShown()) then 
 		if (self:HasContent()) then
-			self:SetAlpha(1)
+			alpha = 1
 		elseif (CursorHasSpell() or CursorHasItem() or CursorHasMacro()) then
-			self:SetAlpha(1)
+			alpha = 1
 		else 
 			local cursor = GetCursorInfo()
-			if (cursor == "spell") or (cursor == "macro") or (cursor == "mount") or (cursor == "item") or (cursor == "battlepet") or (IsRetail and cursor == "petaction") then 
-				self:SetAlpha(1)
+			if (cursor == "spell") 
+			or (cursor == "macro") 
+			or (cursor == "mount") 
+			or (cursor == "item") 
+			or (cursor == "battlepet") 
+			or (IsRetail and cursor == "petaction") then 
+				alpha = 1
 			else
-				if (self.showGrid) then 
-					self:SetAlpha(self.overrideAlphaWhenEmpty or 1)
-				else 
-					self:SetAlpha(0)
-				end 
+				--if (self.showGrid) then 
+				alpha = self.overrideAlphaWhenEmpty or 0
+				--end 
 			end 
 		end
-	else
-		self:SetAlpha(0)
+		self:SetAlpha(alpha)
 	end
 end
 
@@ -1276,27 +1372,100 @@ end
 
 -- Called when the usable state of the button changes
 ActionButton.UpdateUsable = function(self) 
-	if UnitIsDeadOrGhost("player") then 
+	if (UnitIsDeadOrGhost("player")) then 
 		self.Icon:SetDesaturated(true)
 		self.Icon:SetVertexColor(.3, .3, .3)
-
-	elseif self.outOfRange then
+		if (self.PostUpdateUsable) then
+			self:PostUpdateUsable(true)
+		end
+	
+	elseif (self.outOfRange) then
 		self.Icon:SetDesaturated(true)
 		self.Icon:SetVertexColor(1, .15, .15)
+		if (self.PostUpdateUsable) then
+			self:PostUpdateUsable(true)
+		end
 
 	else
 		local isUsable, notEnoughMana = IsUsableAction(self.buttonAction)
-		if isUsable then
+		if (isUsable) then
 			self.Icon:SetDesaturated(false)
 			self.Icon:SetVertexColor(1, 1, 1)
+			if (self.PostUpdateUsable) then
+				self:PostUpdateUsable(false)
+			end
 
-		elseif notEnoughMana then
+		elseif (notEnoughMana) then
 			self.Icon:SetDesaturated(true)
 			self.Icon:SetVertexColor(.25, .25, 1)
-
+			if (self.PostUpdateUsable) then
+				self:PostUpdateUsable(true)
+			end
+	
 		else
 			self.Icon:SetDesaturated(true)
 			self.Icon:SetVertexColor(.3, .3, .3)
+			if (self.PostUpdateUsable) then
+				self:PostUpdateUsable(true)
+			end
+		end
+	end
+end
+
+ActionButton.UpdateRank = function(self)
+	if (self.Rank) then
+		local cache = RankCache[self]
+		if (not cache) then 
+			RankCache[self] = {}
+			cache = RankCache[self]
+		end
+
+		-- Retrieve the previous info, if any.
+		local oldCount = cache.spellCount -- counter of the amount of multiples
+		local oldName = cache.spellName -- used as identifier for multiples
+		local oldRank = cache.spellRank -- rank of this instance of the multiple
+
+		-- Update cached info 
+		cache.spellRank = self:GetSpellRank()
+		cache.spellName = GetSpellInfo(self:GetSpellID())
+
+		-- Button spell changed?
+		if (cache.spellName ~= oldName) then 
+
+			-- We had a spell before, and there were more of it.
+			-- We need to find the old ones, update their counts,
+			-- and hide them if there's only a single one left. 
+			if (oldRank and (oldCount > 1)) then 
+				local newCount = oldCount - 1
+				for button,otherCache in pairs(RankCache) do 
+					-- Ignore self, as we no longer have the same counter. 
+					if (button ~= self) and (otherCache.spellName == oldName) then 
+						otherCache.spellCount = newCount
+						button.Rank:SetText((newCount > 1) and otherCache.spellRank or "")
+					end
+				end
+			end 
+		end 
+
+		-- Counter for number of duplicates of the current spell
+		local howMany = 0
+		if (cache.spellRank) then 
+			for button,otherCache in pairs(RankCache) do 
+				if (otherCache.spellName == cache.spellName) then 
+					howMany = howMany + 1
+				end 
+			end
+		end 
+
+		-- Update stored counter
+		cache.spellCount = howMany
+
+		-- Update all rank texts and counters
+		for button,otherCache in pairs(RankCache) do 
+			if (otherCache.spellName == cache.spellName) then 
+				otherCache.spellCount = howMany
+				button.Rank:SetText((howMany > 1) and otherCache.spellRank or "")
+			end 
 		end
 	end
 end
@@ -1368,8 +1537,9 @@ if (IsRetail) then
 		self.SpellHighlight.Model:Hide()
 	end
 
+	-- This one should only apply to blizzard highlight glow updates.
 	ActionButton.UpdateSpellHighlight = function(self)
-		if (not self.SpellHighlight) then
+		if (not self.SpellHighlight) or (LibSecureButton.disableBlizzardGlow) then
 			return
 		end
 		local spellId = self:GetSpellID()
@@ -1407,12 +1577,35 @@ ActionButton.GetActionTexture = function(self)
 	return GetActionTexture(self.buttonAction)
 end
 
-ActionButton.GetBindingText = function(self)
-	return self.bindingAction and GetBindingKey(self.bindingAction) or GetBindingKey("CLICK "..self:GetName()..":LeftButton")
+ActionButton.GetBindingText = function(self, bindingType)
+	if (self.bindingAction) then
+		if (IsRetail) then
+			if (self.prioritizeGamePadBinds) or (bindingType == "pad") then
+				local bindingAction
+				for keyNumber = 1, select("#", GetBindingKey(self.bindingAction)) do 
+					local key = select(keyNumber, GetBindingKey(self.bindingAction))
+					if (IsBindingForGamePad(key)) then
+						return key
+					end
+				end
+			elseif (self.prioritzeKeyboardBinds) or (bindingType == "key") then
+				local bindingAction
+				for keyNumber = 1, select("#", GetBindingKey(self.bindingAction)) do 
+					local key = select(keyNumber, GetBindingKey(self.bindingAction))
+					if (not IsBindingForGamePad(key)) then
+						return key
+					end
+				end
+			end
+		end
+		return GetBindingKey(self.bindingAction) or GetBindingKey("CLICK "..self:GetName()..":LeftButton")
+	end
+
 end 
 
+ActionButton.AbbreviateBindText = AbbreviateBindText
 ActionButton.GetBindingTextAbbreviated = function(self)
-	return getBindingKeyText(self:GetBindingText())
+	return self:AbbreviateBindText(self:GetBindingText())
 end
 
 ActionButton.GetCooldown = function(self) 
@@ -1692,6 +1885,7 @@ PetButton.GetSpellID = function(self)
 	return spellID
 end
 
+PetButton.AbbreviateBindText = ActionButton.AbbreviateBindText
 PetButton.GetBindingText = ActionButton.GetBindingText
 PetButton.GetBindingTextAbbreviated = ActionButton.GetBindingTextAbbreviated
 PetButton.GetTooltip = ActionButton.GetTooltip
@@ -1817,6 +2011,48 @@ StanceButton.OnEnable = function(self)
 	self:RegisterEvent("PLAYER_ENTERING_WORLD", UpdateStanceButton)
 end
 
+-- ExitButton Template
+----------------------------------------------------
+local ExitButton = LibSecureButton:CreateFrame("CheckButton")
+local ExitButton_MT = { __index = ExitButton }
+
+ExitButton.OnEnter = function(self) 
+	self.isMouseOver = true
+
+	if (self.PostEnter) then 
+		self:PostEnter()
+	end 
+end
+
+ExitButton.OnLeave = function(self) 
+	self.isMouseOver = nil
+	self.UpdateTooltip = nil
+
+	local tooltip = self:GetTooltip()
+	tooltip:Hide()
+
+	if (self.PostLeave) then 
+		self:PostLeave()
+	end 
+end
+
+ExitButton.PreClick = function(self) end
+ExitButton.PostClick = function(self, button) 
+	if (UnitOnTaxi("player") and (not InCombatLockdown())) then
+		TaxiRequestEarlyLanding()
+	elseif (IsPossessBarVisible() and PetCanBeDismissed()) then
+		PetDismiss()
+	end
+end
+
+ExitButton.GetTooltip = ActionButton.GetTooltip
+
+-- Add noops as needed. Will expand on this later.
+ExitButton.OnEnable = function() end
+ExitButton.OnDisable = function() end
+ExitButton.Update = function() end
+ExitButton.UpdateBinding = function() end
+
 -- Library API
 ----------------------------------------------------
 LibSecureButton.CreateButtonLayers = function(self, button)
@@ -1882,6 +2118,19 @@ LibSecureButton.CreateButtonCount = function(self, button)
 	count:SetShadowColor(0, 0, 0, 0)
 	count:SetTextColor(250/255, 250/255, 250/255, .85)
 	button.Count = count
+end 
+
+LibSecureButton.CreateButtonRank = function(self, button)
+	local rank = (button.Overlay or button):CreateFontString()
+	rank:SetDrawLayer("OVERLAY", 1)
+	rank:SetPoint("BOTTOMRIGHT", -2, 1)
+	rank:SetFontObject(Game12Font_o1)
+	rank:SetJustifyH("CENTER")
+	rank:SetJustifyV("BOTTOM")
+	rank:SetShadowOffset(0, 0)
+	rank:SetShadowColor(0, 0, 0, 0)
+	rank:SetTextColor(250/255, 250/255, 250/255, .85)
+	button.Rank = count
 end 
 
 LibSecureButton.CreateButtonAutoCast = function(self, button)
@@ -2027,15 +2276,14 @@ end
 
 -- Public API
 ----------------------------------------------------
+-- @input buttonTemplate <table,string,function,nil>
+-- 		table: all methods are copied to the new button
+--  	string: the spawning module calls module[buttonTemple](module, button, ...) on PostCreate
+-- 		function: the function is copied directly to the button's own PostCreate method
 LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTemplate, ...)
-	check(parent, 1, "string", "table")
-	check(buttonType, 2, "string")
-	check(buttonTemplate, 3, "table", "nil")
-
-	-- Doing it this way to only include the global arguments
-	-- available in all button types as function arguments.
-	-- *What the hell am I talking about here?
-	local barID, buttonID = ...
+	check(buttonType, 1, "string")
+	check(parent, 2, "string", "table")
+	check(buttonTemplate, 3, "table", "string", "function", "nil")
 
 	-- Store the button
 	if (not Buttons[self]) then 
@@ -2053,7 +2301,7 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 	end 
 
 	-- Make up an unique name
-	local name = nameHelper(self, count + 1, buttonType)
+	local name = nameHelper(count + 1, buttonType)
 
 	-- Create an additional visibility layer to handle manual toggling
 	local visibility = self:CreateFrame("Frame", nil, parent, "SecureHandlerAttributeTemplate")
@@ -2070,9 +2318,11 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 
 	local button
 	if (buttonType == "pet") then 
+		local buttonID = ...
+
 		-- Add a page driver layer, basically a fake bar for the current button
 		local page = visibility:CreateFrame("Frame", nil, "SecureHandlerAttributeTemplate")
-		page.AddDebugMessage = self.AddDebugMessageFormatted
+		page.AddDebugMessage = self.AddDebugMessageFormatted or function() end
 
 		button = setmetatable(LibSecureButton:PrepareButton(page:CreateFrame("CheckButton", name, "PetActionButtonTemplate")), PetButton_MT)
 		button:SetFrameStrata("LOW")
@@ -2183,15 +2433,61 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 		button:SetScript("OnDragStart", StanceButton.OnDragStart)
 		button:SetScript("OnReceiveDrag", StanceButton.OnReceiveDrag)
 
-	else 
+	elseif (buttonType == "petbattle") then
+
+	elseif (buttonType == "vehicle") then
+
+	elseif (buttonType == "exit") then
+
+		button = setmetatable(visibility:CreateFrame("CheckButton", nil, "SecureActionButtonTemplate"), ExitButton_MT)
+		button:SetAttribute("type", "macro")
+		button:SetFrameStrata("LOW")
+		button:SetScript("OnEnter", ExitButton.OnEnter)
+		button:SetScript("OnLeave", ExitButton.OnLeave)
+		button:SetScript("PreClick", ExitButton.PreClick)
+		button:SetScript("PostClick", ExitButton.PostClick)
+		button._owner = visibility
+
+		local visibilityDriver, macroText
+		if (IsClassic) then
+			macroText = "/dismount [mounted]"
+			visibilityDriver = "[mounted]show;hide"
+		
+		elseif (IsRetail) then
+			macroText = "/leavevehicle [target=vehicle,exists,canexitvehicle]\n/dismount [mounted]"
+			visibilityDriver = "[target=vehicle,exists,canexitvehicle][possessbar][mounted]show;hide"
+		end
+
+		button:SetAttribute("macrotext", macroText)
+		RegisterAttributeDriver(visibility, "state-vis", visibilityDriver)
+
+	else
+		local buttonID, barID = ...
+		local hideInVehicles, showInPetBattles
+
+		if (barID == 1) then
+			if (buttonID > 6) then
+				hideInVehicles = true
+				showInPetBattles = false
+			else
+				-- Allow these optional flags to override
+				-- the visibility and driver settings of 
+				-- the buttons used in vehicles and petbattles.
+				hideInVehicles, showInPetBattles = select(3, ...)
+			end
+		else
+			hideInVehicles = true
+			showInPetBattles = false
+		end
+
 		-- Add a page driver layer, basically a fake bar for the current button
 		local page = visibility:CreateFrame("Frame", nil, "SecureHandlerAttributeTemplate")
 		page.id = barID
-		page.AddDebugMessage = self.AddDebugMessageFormatted
+		page.AddDebugMessage = self.AddDebugMessageFormatted or function() end
 		page:SetID(barID) 
 		page:SetAttribute("_onattributechanged", SECURE.Page_OnAttributeChanged)
 
-		button = setmetatable(page:CreateFrame("CheckButton", name, "SecureActionButtonTemplate"), ActionButton_MT)
+		button = setmetatable(page:CreateFrame("CheckButton", name, "SecureHandlerAttributeTemplate,SecureActionButtonTemplate"), ActionButton_MT)
 		button:SetFrameStrata("LOW")
 
 		-- Create button layers
@@ -2203,6 +2499,9 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 		LibSecureButton:CreateButtonAutoCast(button)
 		LibSecureButton:CreateButtonSpellHighlight(button)
 		LibSecureButton:CreateFlyoutArrow(button)
+		if (IsClassic) then
+			LibSecureButton:CreateButtonRank(button)
+		end
 
 		button:RegisterForDrag("LeftButton", "RightButton")
 		button:RegisterForClicks("AnyUp")
@@ -2337,6 +2636,9 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 
 		elseif (IsRetail) then
 			if (barID == 1) then 
+
+				local vehicle = string_format("[vehicleui]%d;", GetVehicleBarIndex())
+
 				-- Moving vehicles farther back in the queue, as some overridebars like the ones
 				-- found in the new 8.1.5 world quest "Cycle of Life" returns positive for both vehicleui and overridebar.
 				-- In other words; do NOT change the order of these, as it really matters!
@@ -2370,7 +2672,7 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 
 		-- enable the visibility driver
 		RegisterAttributeDriver(visibility, "state-vis", visibilityDriver)
-		
+
 		-- reset the page before applying a new page driver
 		page:SetAttribute("state-page", "0") 
 
@@ -2390,18 +2692,37 @@ LibSecureButton.SpawnActionButton = function(self, buttonType, parent, buttonTem
 
 	-- Add any methods from the optional template.
 	-- *we're now allowing modules to overwrite methods.
-	if buttonTemplate then
-		for methodName, func in pairs(buttonTemplate) do
-			if (type(func) == "function") then
-				button[methodName] = func
+	if (buttonTemplate) then
+		if (type(buttonTemplate) == "table") then
+			for methodName, func in pairs(buttonTemplate) do
+				if (type(func) == "function") then
+					button[methodName] = func
+				end
+			end
+		elseif (type(buttonTemplate) == "function") then
+			button.PostCreate = buttonTemplate
+		elseif (type(buttonTemplate) == "string") then
+			local module, method = self, buttonTemplate
+			button.PostCreate = function(button, ...)
+				local func = module[method]
+				if (func) then
+					func(module, button, ...)
+				end
 			end
 		end
 	end
+
+	-- Embed forging and chaining directly in the buttons.
+	-- They will all be needing it anyway soon, 
+	-- so no use to go the long way around module embedding.
+	LibForge:Embed(button)
 	
 	-- Call the post create method if it exists, 
 	-- and pass along any remaining arguments.
 	-- This is a good place to add styling.
-	if button.PostCreate then
+	-- This method can assume the custom template
+	-- as well as the forge methods are in place.
+	if (button.PostCreate) then
 		button:PostCreate(...)
 	end
 
@@ -2424,7 +2745,10 @@ end
 -- Returns an iterator for all buttons registered to the module
 -- Buttons are returned as the first return value, and ordered by their IDs.
 LibSecureButton.GetAllActionButtonsOrdered = function(self)
-	local buttons = Buttons[self]
+	-- If this is called as a method of the library itself,
+	-- return an iterator for all registered buttons,
+	-- regardless of which module they were spawned by.
+	local buttons = (self == LibSecureButton) and AllButtons or Buttons[self]
 	if (not buttons) then 
 		return function() return nil end
 	end 
@@ -2445,7 +2769,10 @@ end
 -- Returns an iterator for all buttons of the given type registered to the module.
 -- Buttons are returned as the first return value, and ordered by their IDs.
 LibSecureButton.GetAllActionButtonsByType = function(self, buttonType)
-	local buttons = Buttons[self]
+	-- If this is called as a method of the library itself,
+	-- return an iterator for all registered buttons of the type,
+	-- regardless of which module they were spawned by.
+	local buttons = (self == LibSecureButton) and AllButtons or Buttons[self]
 	if (not buttons) then 
 		return function() return nil end
 	end 
@@ -2469,58 +2796,164 @@ LibSecureButton.GetActionButtonTooltip = function(self)
 	return LibSecureButton:GetTooltip("GP_ActionButtonTooltip") or LibSecureButton:CreateTooltip("GP_ActionButtonTooltip")
 end
 
-LibSecureButton.GetActionBarControllerPetBattle = function(self)
-	if ((not Controllers[self]) or (not Controllers[self].petBattle)) then 
+-- The global names of the first 6 action buttons
+-- should be passed in order as the ellipsis here.
+-- Otherwise the first 6 registered buttons are assumed.
+LibSecureButton.GetActionBarControllerPetBattle = function(self, ...)
 
+	-- Attempt to retrieve the passed global button names.
+	local primarySix = { ... }
+
+	-- If no names were passed, try to guess.
+	if (#primarySix ~= 6) then
 		-- Get the generic button name without the ID added
-		local name = nameHelper(self)
-
-		-- The blizzard petbattle UI gets its keybinds from the primary action bar, 
-		-- so in order for the petbattle UI keybinds to function properly, 
-		-- we need to temporarily give the primary action bar backs its keybinds.
-		local petbattle = self:CreateFrame("Frame", nil, UIParent, "SecureHandlerAttributeTemplate")
-		petbattle:SetAttribute("_onattributechanged", [[
-			if (name == "state-petbattle") then
-				if (value == "petbattle") then
-					for i = 1,6 do
-						local our_button, blizz_button = ("CLICK ]]..name..[[%d:LeftButton"):format(i), ("ACTIONBUTTON%d"):format(i)
-
-						-- Grab the keybinds from our own primary action bar,
-						-- and assign them to the default blizzard bar. 
-						-- The pet battle system will in turn get its bindings 
-						-- from the default blizzard bar, and the magic works! :)
-						
-						for k=1,select("#", GetBindingKey(our_button)) do
-							local key = select(k, GetBindingKey(our_button)) -- retrieve the binding key from our own primary bar
-							self:SetBinding(true, key, blizz_button) -- assign that key to the default bar
-						end
-						
-						-- do the same for the default UIs bindings
-						for k=1,select("#", GetBindingKey(blizz_button)) do
-							local key = select(k, GetBindingKey(blizz_button))
-							self:SetBinding(true, key, blizz_button)
-						end	
-					end
-				else
-					-- Return the key bindings to whatever buttons they were
-					-- assigned to before we so rudely grabbed them! :o
-					self:ClearBindings()
-				end
-			end
-		]])
-
-		-- Do we ever need to update his?
-		RegisterAttributeDriver(petbattle, "state-petbattle", "[petbattle]petbattle;nopetbattle")
-
-		if (not Controllers[self]) then 
-			Controllers[self] = {}
+		local name = nameHelper()
+		for i = 1,6 do
+			primarySix[i] = name .. i
 		end
-		Controllers[self].petBattle = petbattle
 	end
+
+	if (not Controllers[self]) then 
+		Controllers[self] = {}
+	end
+
+	-- The blizzard petbattle UI gets its keybinds from the primary action bar, 
+	-- so in order for the petbattle UI keybinds to function properly, 
+	-- we need to temporarily give the primary action bar backs its keybinds.
+	local petbattle = Controllers[self].petBattle or self:CreateFrame("Frame", nil, UIParent, "SecureHandlerAttributeTemplate")
+	petbattle:SetAttribute("_onattributechanged", [[
+		if (name == "state-petbattle") then
+			if (value == "petbattle") then
+
+				-- Insert the global button names. Hackish.
+				primarySix = table.new();
+				primarySix[1] = "]]..primarySix[1]..[[";
+				primarySix[2] = "]]..primarySix[2]..[[";
+				primarySix[3] = "]]..primarySix[3]..[[";
+				primarySix[4] = "]]..primarySix[4]..[[";
+				primarySix[5] = "]]..primarySix[5]..[[";
+				primarySix[6] = "]]..primarySix[6]..[[";
+
+				for i = 1,6 do
+					local our_button, blizz_button = "CLICK "..primarySix[i]..":LeftButton", "ACTIONBUTTON"..i;
+
+					-- Grab the keybinds from our own primary action bar,
+					-- and assign them to the default blizzard bar. 
+					-- The pet battle system will in turn get its bindings 
+					-- from the default blizzard bar, and the magic works! :)
+					
+					for k=1,select("#", GetBindingKey(our_button)) do
+						local key = select(k, GetBindingKey(our_button)) -- retrieve the binding key from our own primary bar
+						self:SetBinding(true, key, blizz_button) -- assign that key to the default bar
+					end
+					
+					-- Do the same for the default UIs bindings.
+					-- This is not superflous, as our own bars more often than not
+					-- uses override bindings, not actual bindings. 
+					for k = 1,select("#", GetBindingKey(blizz_button)) do
+						local key = select(k, GetBindingKey(blizz_button))
+						self:SetBinding(true, key, blizz_button)
+					end	
+				end
+			else
+				-- Return the key bindings to whatever buttons they were
+				-- assigned to before we so rudely grabbed them! :o
+				self:ClearBindings()
+			end
+		end
+	]])
+
+	-- Do we ever need to update his?
+	UnregisterAttributeDriver(petbattle, "state-petbattle")
+	RegisterAttributeDriver(petbattle, "state-petbattle", "[petbattle]petbattle;nopetbattle")
+
+	Controllers[self].petBattle = petbattle
+
 	return Controllers[self].petBattle
 end
 
-LibSecureButton.GetActionBarControllerVehicle = function(self)
+-- The global names of the first 6 action buttons
+-- should be passed in order as the ellipsis here.
+-- Otherwise the first 6 registered buttons are assumed.
+LibSecureButton.GetActionBarControllerVehicle = function(self, ...)
+
+	-- Attempt to retrieve the passed global button names.
+	local primarySix = { ... }
+
+	-- If no names were passed, try to guess.
+	if (#primarySix ~= 6) then
+		-- Get the generic button name without the ID added
+		local name = nameHelper()
+		for i = 1,6 do
+			primarySix[i] = name .. i
+		end
+	end
+
+	if (not Controllers[self]) then 
+		Controllers[self] = {}
+	end
+
+	-- The blizzard petbattle UI gets its keybinds from the primary action bar, 
+	-- so in order for the petbattle UI keybinds to function properly, 
+	-- we need to temporarily give the primary action bar backs its keybinds.
+	local vehicle = Controllers[self].vehicle or self:CreateFrame("Frame", nil, UIParent, "SecureHandlerAttributeTemplate")
+	vehicle:SetAttribute("_onattributechanged", [[
+		if (name == "state-vehicle") then
+			if (value == "vehicle") then
+
+				-- Insert the global button names. Hackish.
+				primarySix = table.new();
+				primarySix[1] = "]]..primarySix[1]..[[";
+				primarySix[2] = "]]..primarySix[2]..[[";
+				primarySix[3] = "]]..primarySix[3]..[[";
+				primarySix[4] = "]]..primarySix[4]..[[";
+				primarySix[5] = "]]..primarySix[5]..[[";
+				primarySix[6] = "]]..primarySix[6]..[[";
+
+				for i = 1,6 do
+					local our_button, blizz_button = "CLICK "..primarySix[i]..":LeftButton", "ACTIONBUTTON"..i;
+
+					-- Grab the keybinds from our own primary action bar,
+					-- and assign them to the default blizzard bar. 
+					-- The pet battle system will in turn get its bindings 
+					-- from the default blizzard bar, and the magic works! :)
+					
+					for k=1,select("#", GetBindingKey(our_button)) do
+						local key = select(k, GetBindingKey(our_button)) -- retrieve the binding key from our own primary bar
+						self:SetBinding(true, key, blizz_button) -- assign that key to the default bar
+					end
+					
+					-- Do the same for the default UIs bindings.
+					-- This is not superflous, as our own bars more often than not
+					-- uses override bindings, not actual bindings. 
+					for k = 1,select("#", GetBindingKey(blizz_button)) do
+						local key = select(k, GetBindingKey(blizz_button))
+						self:SetBinding(true, key, blizz_button)
+					end	
+				end
+			else
+				-- Return the key bindings to whatever buttons they were
+				-- assigned to before we so rudely grabbed them! :o
+				self:ClearBindings()
+			end
+		end
+	]])
+
+	-- Do we ever need to update his?
+	UnregisterAttributeDriver(vehicle, "state-vehicle")
+	RegisterAttributeDriver(vehicle, "state-vehicle", "[vehicleui]vehicle;novehicle")
+
+	Controllers[self].vehicle = vehicle
+
+	return Controllers[self].vehicle
+end
+
+LibSecureButton.DisableBlizzardButtonGlow = function(self)
+	LibSecureButton.disableBlizzardGlow = true
+end
+
+LibSecureButton.EnableBlizzardButtonGlow = function(self)
+	LibSecureButton.disableBlizzardGlow = nil
 end
 
 -- Modules should call this at UPDATE_BINDINGS and the first PLAYER_ENTERING_WORLD
@@ -2530,6 +2963,7 @@ LibSecureButton.UpdateActionButtonBindings = function(self)
 
 	local mainBarUsed
 	local petBattleUsed, vehicleUsed
+	local primarySix = {}
 
 	for button in self:GetAllActionButtonsByType("action") do 
 
@@ -2547,8 +2981,12 @@ LibSecureButton.UpdateActionButtonBindings = function(self)
 		if (barID == 1) then
 			bindingAction = ("ACTIONBUTTON%d"):format(buttonID)
 
-			-- We've used the main bar, and need to update the controllers
-			mainBarUsed = true
+			if (buttonID >= 1) and (buttonID <= 6) then
+				primarySix[buttonID] = button:GetName()
+
+				-- We've used the main bar, and need to update the controllers
+				mainBarUsed = true
+			end
 
 		elseif (barID == BOTTOMLEFT_ACTIONBAR_PAGE) then 
 			bindingAction = ("MULTIACTIONBAR1BUTTON%d"):format(buttonID)
@@ -2608,14 +3046,95 @@ LibSecureButton.UpdateActionButtonBindings = function(self)
 		
 	end
 
-	if (mainBarUsed and not petBattleUsed) then 
-		self:GetActionBarControllerPetBattle()
-	end 
-
-	if (mainBarUsed and not vehicleUsed) then 
-		self:GetActionBarControllerVehicle()
+	if (mainBarUsed) then
+		if (not petBattleUsed) then 
+			-- Pass the global names of the primary six buttons if available.
+			if (#primarySix == 6) then
+				self:GetActionBarControllerPetBattle(unpack(primarySix))
+			else
+				self:GetActionBarControllerPetBattle()
+			end
+		end 
+		
+		-- Generally not needed, as the main bar displays these just fine.
+		-- And even in cases where the main bar is set to hide in vehicles,
+		-- the assumption is that the modules are making their own vehicle bars if so.
+		-- In a situation where custom bars are hidden in vehicles, and no alternative given,
+		-- the modules would need to call :GetActionBarControllerVehicle(button1, button2, ...) themselves.
+		-- Leaving this code here just for reference, not meant to be used.
+		--if (not vehicleUsed) then 
+		--	-- Pass the global names of the primary six buttons if available.
+		--	if (#primarySix == 6) then
+		--		self:GetActionBarControllerVehicle(unpack(primarySix))
+		--	else
+		--		self:GetActionBarControllerVehicle()
+		--	end
+		--end
 	end
 
+end
+
+-- MaxDps
+LibSecureButton.HookMaxDps = function(self, event, ...)
+	if (event == "ADDON_LOADED") then
+		local addon = ...
+		if (addon ~= "MaxDps") then
+			return
+		end
+		LibSecureButton:UnregisterEvent("ADDON_LOADED", "HookMaxDps")
+	end 
+
+	if (LibSecureButton.maxDPSHooked) or (not MaxDps) then
+		return
+	end
+	
+	MaxDps.FetchAzeriteUI = function()
+		for button in LibSecureButton:GetAllActionButtonsByType("action") do 
+			MaxDps:AddStandardButton(button)
+		end
+		for button in LibSecureButton:GetAllActionButtonsByType("pet") do 
+			MaxDps:AddStandardButton(button)
+		end
+	end
+	
+	-- This is called in their :Fetch() method, 
+	-- so it should be automatically updated for us too.
+	local UpdateButtonGlow = function()
+		if (not MaxDps.db) then
+			return
+		end
+		if (MaxDps.db.global) and (MaxDps.db.global.disableButtonGlow) then
+			LibSecureButton:DisableBlizzardButtonGlow()
+		else
+			LibSecureButton:EnableBlizzardButtonGlow()
+		end
+	end
+	hooksecurefunc(MaxDps, "UpdateButtonGlow", UpdateButtonGlow)
+
+	-- ToDo: 
+	-- Hook this into our own highlight system, 
+	-- allowing the buttons to use their own glows
+	-- instead of what is decided by MaxDps.
+	-- This is because our buttons more often than not 
+	-- have specific shapes and borders that does not fit
+	-- the general assumptions made by MaxDps and other addons.
+	-- Will probably need to make this optional through the API.
+
+	--local Glow = MaxDps.Glow
+	--MaxDps.Glow = function(this, button, id, texture, type, color)
+	--	if (not ButtonLookup[button]) then
+	--		return Glow(this, button, id, texture, type, color)
+	--	end
+	--end
+
+	--local HideGlow = MaxDps.HideGlow
+	--MaxDps.HideGlow = function(this, button, id)
+	--	if (not ButtonLookup[button]) then
+	--		return HideGlow(this, button, id)
+	--	end
+	--end
+
+	LibSecureButton.maxDPSHooked = true
 end
 
 -- This will cause multiple updates when library is updated. Hmm....
@@ -2628,6 +3147,8 @@ end)
 -- Module embedding
 local embedMethods = {
 	SpawnActionButton = true,
+	DisableBlizzardButtonGlow = true,
+	EnableBlizzardButtonGlow = true,
 	GetActionButtonTooltip = true,
 	GetAllActionButtonsOrdered = true,
 	GetAllActionButtonsByType = true,
@@ -2647,4 +3168,17 @@ end
 -- Upgrade existing embeds, if any
 for target in pairs(LibSecureButton.embeds) do
 	LibSecureButton:Embed(target)
+end
+
+-- Doing this from the back-end now.
+if (IsAddOnEnabled("MaxDps")) then
+	if (IsAddOnLoaded("MaxDps")) then
+		LibSecureButton:HookMaxDps()
+	else
+		LibSecureButton:RegisterEvent("ADDON_LOADED", "HookMaxDps")
+	end
+else
+	-- Let's just kill this off if it's not needed, 
+	-- to avoid anybody calling it wrongly.
+	LibSecureButton.HookMaxDps = function() end
 end

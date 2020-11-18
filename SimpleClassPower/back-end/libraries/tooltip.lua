@@ -1,4 +1,4 @@
-local LibTooltip = Wheel:Set("LibTooltip", 83)
+local LibTooltip = Wheel:Set("LibTooltip", 85)
 if (not LibTooltip) then
 	return
 end
@@ -652,7 +652,7 @@ Tooltip.GetUnitHealthColor = function(self, unit)
 		if (self.data.isPet and self.data.petRarity) then 
 			r, g, b = unpack(self.colors.quality[self.data.petRarity - 1])
 		else
-			if ((not UnitPlayerControlled(unit)) and UnitIsTapDenied(unit)) then
+			if ((not UnitPlayerControlled(unit)) and UnitIsTapDenied(unit) and UnitCanAttack("player", unit)) then
 				r, g, b = unpack(self.colors.tapped)
 			elseif (not UnitIsConnected(unit)) then
 				r, g, b = unpack(self.colors.disconnected)
@@ -672,7 +672,7 @@ Tooltip.GetUnitHealthColor = function(self, unit)
 			end
 		end 
 	else 
-		if ((not UnitPlayerControlled(unit)) and UnitIsTapDenied(unit)) then
+		if ((not UnitPlayerControlled(unit)) and UnitIsTapDenied(unit) and UnitCanAttack("player", unit)) then
 			r, g, b = unpack(self.colors.tapped)
 		elseif (not UnitIsConnected(unit)) then
 			r, g, b = unpack(self.colors.disconnected)
@@ -2659,12 +2659,14 @@ local embedMethods = {
 LibTooltip.ForAllEmbeds = function(self, method, ...)
 	for target in pairs(self.embeds) do 
 		if (target) then 
-			if (type(method) == "string") then
-				if target[method] then
-					target[method](target, ...)
+			if (not target.IsUserDisabled) or (not target:IsUserDisabled()) then
+				if (type(method) == "string") then
+					if target[method] then
+						target[method](target, ...)
+					end
+				else
+					method(target, ...)
 				end
-			else
-				method(target, ...)
 			end
 		end 
 	end 

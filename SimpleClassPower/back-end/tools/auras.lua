@@ -6,7 +6,7 @@ on a widgetcontainer aura plugin element.
 
 --]]--
 
-local LibAuraTool = Wheel:Set("LibAuraTool", 2)
+local LibAuraTool = Wheel:Set("LibAuraTool", 7)
 if (not LibAuraTool) then
 	return
 end
@@ -31,7 +31,6 @@ local type = type
 -- WoW API
 local GetSpellInfo = GetSpellInfo
 local GetTime = GetTime
-local UnitAffectingCombat = UnitAffectingCombat
 local UnitCanAttack = UnitCanAttack
 local UnitClass = UnitClass
 local UnitClassification = UnitClassification
@@ -45,7 +44,6 @@ local UnitLevel = UnitLevel
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
 local IsRetail = LibClientBuild:IsRetail()
-local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Library registries
 LibAuraTool.embeds = LibAuraTool.embeds or {}
@@ -79,8 +77,7 @@ end
 -- Forcing this for classes still lacking strict filter lists,
 -- or we'd end up with nothing being shown at all.
 local playerClass = select(2, UnitClass("player"))
-local SLACKMODE = IsRetailShadowlands -- forcing slack mode until filters can be redone and verified
-			   or (playerClass == "DEATHKNIGHT")
+local SLACKMODE = (playerClass == "DEATHKNIGHT")
 			   or (playerClass == "DEMONHUNTER")
 			   --or (playerClass == "DRUID")
 			   or (IsClassic and (playerClass == "HUNTER"))
@@ -164,8 +161,9 @@ local PrioHigh 			= 2^21 -- High priority, shown first after boss
 local PrioBoss 			= 2^22 -- Same priority as boss debuffs
 
 -- Some constants to avoid a million auraIDs
-local L_DRINK = GetSpellInfo(430)
-local L_FOOD = GetSpellInfo(433)
+local L_DRINK = GetSpellInfo(430) -- 104270
+local L_FOOD = GetSpellInfo(433) -- 104935
+local L_FOOD_N_DRINK = GetSpellInfo(257425)
 
 -- Shorthand tags for quality of life, following the guidelines above.
 -- Note: Do NOT add any of these together, they must be used as the ONLY tag when used!
@@ -334,7 +332,7 @@ local checkCombatConditionals = function(...)
 
 	-- Only show out of combat
 	if (UserFlags[spellID]) then
-		if (HasUserFlags(spellID, NoCombat) and (UnitAffectingCombat("player"))) then
+		if (HasUserFlags(spellID, NoCombat) and (element.inCombat)) then
 
 			-- Do we need to warn about this running out mid combat?
 			if (checkWarningConditionals(...)) then
@@ -361,15 +359,19 @@ local auraFilter = function(...)
 	end
 
 	-- Show Eat/Drink on player(?)
-	if (name == L_DRINK) or (name == L_FOOD) then
+	if (element.isYou) and ((name == L_DRINK) or (name == L_FOOD) or (name == L_FOOD_N_DRINK)) then
 		return true, nil, hideFilteredSpellID
 	end
-	
+
+	if (element.isEnemy) and (element._owner.unitGroup == "boss") and (not isCastByPlayer) then
+		return false, nil, hideUnfilteredSpellID
+	end
+
 	-- Show anything explicitly whitelisted
 	if (checkWhitelistConditionals(...)) then
 		return true, nil, hideFilteredSpellID
 
-	-- Show anything explicitly blacklisted
+	-- Hide anything explicitly blacklisted
 	elseif (checkBlacklistConditionals(...)) then
 		return false, nil, hideFilteredSpellID
 
@@ -384,7 +386,7 @@ local auraFilter = function(...)
 	end
 
 	-- Show time based debuffs from environment or NPCs
-	if (not isBuff) and (UnitIsUnit(unit, "player")) and (not unitCaster or not UnitIsPlayer(unitCaster)) then
+	if (not isBuff) and (element.isYou) and (not unitCaster or not UnitIsPlayer(unitCaster)) then
 		if (checkTimeAndStackbasedConditionals(...)) then
 			return true, nil, hideUnfilteredSpellID
 		end
@@ -398,19 +400,19 @@ local auraFilter = function(...)
 	end
 
 	-- Show static crap out of combat
-	if ((SLACKMODE) or (element.enableSpamMode)) and (not UnitAffectingCombat("player")) then
+	if (element.enableSpamMode) and (not element.inCombat) then
 		if (not duration) or (duration == 0) then
 			return true, nil, hideUnfilteredSpellID
 		else
 			if (isBuff) then 
 				if (timeLeft and (timeLeft > 0) and (timeLeft > buffDurationThreshold))
 				or (duration and (duration > 0) and (duration > buffDurationThreshold)) then
-					return true
+					return true, nil, hideUnfilteredSpellID
 				end
 			else 
 				if (timeLeft and (timeLeft > 0) and (timeLeft > debuffDurationThreshold))
 				or (duration and (duration > 0) and (duration > debuffDurationThreshold)) then
-					return true
+					return true, nil, hideUnfilteredSpellID
 				end
 			end
 		end
@@ -420,11 +422,46 @@ local auraFilter = function(...)
 	return false, nil, hideUnfilteredSpellID
 end
 
+-- Back-end expects these return values from any filter:
+-- @return displayAura <boolean>, displayPriority <number,nil>, isFiltered <boolean>
+local auraFilterLegacy = function(...)
+	local element, isBuff, unit, isOwnedByPlayer, name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellID, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = ...
+
+	-- Hide player and friend debuffs, enemy buffs
+	if ((element.isYou or element.isFriend) and (not isBuff)) or ((element.isEnemy) and (isBuff)) then
+		return false, nil, hideUnfilteredSpellID
+	end
+
+	-- Pass the rest through the standard filter 
+	return auraFilter(...)
+end
+
+-- Back-end expects these return values from any filter:
+-- @return displayAura <boolean>, displayPriority <number,nil>, isFiltered <boolean>
+local auraFilterLegacySecondary = function(...)
+	local element, isBuff, unit, isOwnedByPlayer, name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellID, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = ...
+
+	-- Hide player and friend buffs, enemy debuffs
+	if ((element.isYou or element.isFriend) and (isBuff)) or ((element.isEnemy) and (not isBuff)) then
+		return false, nil, hideUnfilteredSpellID
+	end
+
+	-- Pass the rest through the standard filter 
+	return auraFilter(...)
+end
+
 -- Public API
 -----------------------------------------------------------------
 -- Returns a copy of our primary filter function
 LibAuraTool.GetAuraFilter = function(self, ...)
-	return auraFilter
+	local filterType = ...
+	if (filterType == "legacy") then
+		return auraFilterLegacy
+	elseif (filterType == "legacy-secondary") then
+		return auraFilterLegacySecondary
+	else
+		return auraFilter
+	end
 end
 
 -- Returns a populated user tagged aura table, but doesn't affect our original.
@@ -1104,6 +1141,13 @@ elseif (IsRetail) then
 		AddUserFlags(195645, Harmful) 				-- Wing Clip
 	end
 
+	-- Warlock
+	-----------------------------------------------------------------
+	do
+		AddUserFlags(146739, ByPlayer) 						-- Corruption
+		AddUserFlags(317031, ByPlayer) 						-- Corruption (Instant)
+	end
+
 	-- Warrior
 	-----------------------------------------------------------------
 	do
@@ -1244,6 +1288,11 @@ elseif (IsRetail) then
 		AddUserFlags( 11426, ByPlayer) 						-- Ice Barrier (PlayerBuff) CHECK!
 		AddUserFlags( 12472, Boost) 						-- Icy Veins
 
+		-- Mage Azerite Traits
+		------------------------------------------------------------------------
+		AddUserFlags(280177, ByPlayer) 						-- Cauterizing Blink
+		
+
 	end
 
 	-- Blacklists
@@ -1334,7 +1383,73 @@ elseif (IsRetail) then
 		AddUserFlags( 10060, OnPlayer) 						-- Power Infusion
 		AddUserFlags( 15007, OnPlayer + PrioHigh) 			-- Resurrection Sickness
 		AddUserFlags( 64901, OnPlayer) 						-- Symbol of Hope
-		AddUserFlags(279509, OnPlayer) 						-- Witch! (Hallow's End)
+
+		-- Fucking Costumes (Hallow's End)
+		------------------------------------------------------------------------
+		AddUserFlags(172010, OnPlayer) 						-- Abomination Costume
+		AddUserFlags(218132, OnPlayer) 						-- Banshee Costume
+		AddUserFlags( 24732, OnPlayer) 						-- Bat Costume
+		AddUserFlags(191703, OnPlayer) 						-- Bat Costume
+		AddUserFlags(285521, OnPlayer) 						-- Blue Dragon Body Costume
+		AddUserFlags(285519, OnPlayer) 						-- Blue Dragon Head Costume
+		AddUserFlags(285523, OnPlayer) 						-- Blue Dragon Tail Costume
+		AddUserFlags( 97135, OnPlayer) 						-- Children's Costume Aura
+		AddUserFlags(257204, OnPlayer) 						-- Dirty Horse Costume
+		AddUserFlags(257205, OnPlayer) 						-- Dirty Horse Costume
+		AddUserFlags(191194, OnPlayer) 						-- Exquisite Deathwing Costume
+		AddUserFlags(192472, OnPlayer) 						-- Exquisite Deathwing Costume
+		AddUserFlags(217917, OnPlayer) 						-- Exquisite Grommash Costume
+		AddUserFlags(171958, OnPlayer) 						-- Exquisite Lich King Costume
+		AddUserFlags(190837, OnPlayer) 						-- Exquisite VanCleef Costume
+		AddUserFlags(246237, OnPlayer) 						-- Exquisite Xavius Costume
+		AddUserFlags(191210, OnPlayer) 						-- Gargoyle Costume
+		AddUserFlags(172015, OnPlayer) 						-- Geist Costume
+		AddUserFlags( 24735, OnPlayer) 						-- Ghost Costume
+		AddUserFlags( 24736, OnPlayer) 						-- Ghost Costume
+		AddUserFlags(191700, OnPlayer) 						-- Ghost Costume
+		AddUserFlags(191698, OnPlayer) 						-- Ghost Costume
+		AddUserFlags(172008, OnPlayer) 						-- Ghoul Costume
+		AddUserFlags(285522, OnPlayer) 						-- Green Dragon Body Costume
+		AddUserFlags(285520, OnPlayer) 						-- Green Dragon Head Costume
+		AddUserFlags(285524, OnPlayer) 						-- Green Dragon Tail Costume
+		AddUserFlags(246242, OnPlayer) 						-- Horse Head Costume
+		AddUserFlags(246241, OnPlayer) 						-- Horse Tail Costume
+		AddUserFlags( 44212, OnPlayer) 						-- Jack-o'-Lanterned!
+		AddUserFlags(177656, OnPlayer) 						-- Kor'kron Foot Soldier Costume
+		AddUserFlags(177657, OnPlayer) 						-- Kor'kron Foot Soldier Costume
+		AddUserFlags( 24712, OnPlayer) 						-- Leper Gnome Costume
+		AddUserFlags( 24713, OnPlayer) 						-- Leper Gnome Costume
+		AddUserFlags(191701, OnPlayer) 						-- Leper Gnome Costume
+		AddUserFlags(171479, OnPlayer) 						-- "Lil' Starlet" Costume
+		AddUserFlags(171470, OnPlayer) 						-- "Mad Alchemist" Costume
+		AddUserFlags(191211, OnPlayer) 						-- Nerubian Costume
+		AddUserFlags( 24710, OnPlayer) 						-- Ninja Costume
+		AddUserFlags( 24711, OnPlayer) 						-- Ninja Costume
+		AddUserFlags(191686, OnPlayer) 						-- Ninja Costume
+		AddUserFlags( 24708, OnPlayer) 						-- Pirate Costume
+		AddUserFlags(173958, OnPlayer) 						-- Pirate Costume
+		AddUserFlags(173959, OnPlayer) 						-- Pirate Costume
+		AddUserFlags(191682, OnPlayer) 						-- Pirate Costume
+		AddUserFlags(191683, OnPlayer) 						-- Pirate Costume
+		AddUserFlags( 61716, OnPlayer) 						-- Rabbit Costume
+		AddUserFlags(233598, OnPlayer) 						-- Red Dragon Body Costume
+		AddUserFlags(233594, OnPlayer) 						-- Red Dragon Head Costume
+		AddUserFlags(233599, OnPlayer) 						-- Red Dragon Tail Costume
+		AddUserFlags( 30167, OnPlayer) 						-- Red Ogre Costume
+		AddUserFlags(102362, OnPlayer) 						-- Red Ogre Mage Costume
+		AddUserFlags( 24723, OnPlayer) 						-- Skeleton Costume
+		AddUserFlags(191702, OnPlayer) 						-- Skeleton Costume
+		AddUserFlags(172003, OnPlayer) 						-- Slime Costume
+		AddUserFlags(172020, OnPlayer) 						-- Spider Costume
+		AddUserFlags( 99976, OnPlayer) 						-- Squashling Costume
+		AddUserFlags(243321, OnPlayer) 						-- Tranquil Mechanical Yeti Costume
+		AddUserFlags(178306, OnPlayer) 						-- Warsong Orc Costume
+		AddUserFlags(178307, OnPlayer) 						-- Warsong Orc Costume
+		AddUserFlags(191208, OnPlayer) 						-- Wight Costume
+		AddUserFlags( 24740, OnPlayer) 						-- Wisp Costume
+		AddUserFlags(279509, OnPlayer) 						-- Witch!
+		AddUserFlags(171930, OnPlayer) 						-- "Yipp-Saron" Costume
+		
 	end
 
 end

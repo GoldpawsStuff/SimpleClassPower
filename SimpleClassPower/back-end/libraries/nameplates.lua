@@ -1,4 +1,4 @@
-local LibNamePlate = Wheel:Set("LibNamePlate", 58)
+local LibNamePlate = Wheel:Set("LibNamePlate", 61)
 if (not LibNamePlate) then	
 	return
 end
@@ -63,11 +63,8 @@ local UnitCanAttack = UnitCanAttack
 local UnitClass = UnitClass
 local UnitClassification = UnitClassification
 local UnitExists = UnitExists
-local UnitHealth = UnitHealth
-local UnitHealthMax = UnitHealthMax
 local UnitIsFriend = UnitIsFriend
 local UnitIsPlayer = UnitIsPlayer
-local UnitIsTapDenied = UnitIsTapDenied
 local UnitIsTrivial = UnitIsTrivial
 local UnitIsUnit = UnitIsUnit
 local UnitLevel = UnitLevel
@@ -80,7 +77,6 @@ local WorldFrame = WorldFrame
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
 local IsRetail = LibClientBuild:IsRetail()
-local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Plate Registries
 LibNamePlate.allPlates = LibNamePlate.allPlates or {}
@@ -513,6 +509,7 @@ NamePlate.OnShow = function(self, event, unit)
 		self:PreUpdate("OnShow", unit)
 	end 
 	self:KillBlizzard()
+	self:UpdateScale() -- might be needed in 9.0.1
 	self:Show() -- make the fully transparent frame visible
 
 	-- this will trigger the fadein 
@@ -886,7 +883,7 @@ LibNamePlate.CreateNamePlate = function(self, baseFrame, name)
 
 	-- Follow the blizzard scale changes.
 	-- Does not appear to follow scale changes in 9.0.1.
-	--baseFrame:HookScript("OnSizeChanged", function() plate:UpdateScale() end)
+	baseFrame:HookScript("OnSizeChanged", function() plate:UpdateScale() end)
 
 	-- Since constantly updating frame levels can cause quite the performance drop, 
 	-- we're just giving each frame a set frame level when they spawn. 
@@ -1330,12 +1327,14 @@ end
 LibNamePlate.ForAllEmbeds = function(self, method, ...)
 	for target in pairs(self.embeds) do 
 		if (target) then 
-			if (type(method) == "string") then
-				if target[method] then
-					target[method](target, ...)
+			if (not target.IsUserDisabled) or (not target:IsUserDisabled()) then
+				if (type(method) == "string") then
+					if target[method] then
+						target[method](target, ...)
+					end
+				else
+					method(target, ...)
 				end
-			else
-				method(target, ...)
 			end
 		end 
 	end 

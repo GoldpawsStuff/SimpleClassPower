@@ -18,14 +18,15 @@ local unpack = unpack
 -- WoW API
 local IsInGroup = IsInGroup
 local IsInInstance = IsInInstance
+local UnitCanAttack = UnitCanAttack
 local UnitClass = UnitClass
 local UnitDetailedThreatSituation = UnitDetailedThreatSituation
-local UnitIsFriend = UnitIsFriend
 local UnitGUID = UnitGUID
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
 local UnitIsConnected = UnitIsConnected
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitIsFriend = UnitIsFriend
 local UnitIsPlayer = UnitIsPlayer
 local UnitIsUnit = UnitIsUnit
 local UnitIsTapDenied = UnitIsTapDenied 
@@ -41,7 +42,6 @@ local S_PLAYER_OFFLINE = PLAYER_OFFLINE
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
 local IsRetail = LibClientBuild:IsRetail()
-local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Constants
 local _,CLASS = UnitClass("player")
@@ -248,6 +248,15 @@ local UpdateColors = function(health, unit, min, max)
 		end 
 		health:SetStatusBarColor(r, g, b)
 		health.Preview:SetStatusBarColor(r, g, b)
+
+		-- Dynamically tint the absorb bar towards the health color
+		local absorb = health.Absorb
+		if (absorb and health.colorAbsorb) then
+			local aR = r + (1 - r)*4/5 -- 1/2
+			local aG = g + (1 - g)*3/4 -- 1/3
+			local aB = b + (1 - b)*4/5 -- 1/2
+			absorb:SetStatusBarColor(aR, aG, aB)
+		end
 	end 
 	
 	if (health.PostUpdateColor) then 
@@ -259,6 +268,14 @@ local UpdateOrientations = function(health)
 	local orientation = health:GetOrientation() or "RIGHT"
 	local orientationFlippedH = health:IsFlippedHorizontally()
 	local orientationFlippedV = health:IsFlippedVertically()
+
+	local mirrorOrientation =  orientation == "LEFT" and "RIGHT" 
+	or orientation == "RIGHT" and "LEFT" 
+	or orientation == "UP" and "DOWN"
+	or orientation == "DOWN" and "UP"
+
+	local mirrorFlippedH = (mirrorOrientation == "RIGHT") and true or false
+	local mirrorFlippedV = (mirrorOrientation == "DOWN") and true or false
 
 	local preview = health.Preview
 	preview:SetOrientation(orientation) 
@@ -334,7 +351,7 @@ local Update = function(self, event, unit)
 	health.guid = guid
 	health.disconnected = not UnitIsConnected(unit)
 	health.dead = UnitIsDeadOrGhost(unit)
-	health.tapped = (not UnitPlayerControlled(unit)) and UnitIsTapDenied(unit)
+	health.tapped = (not UnitPlayerControlled(unit)) and UnitIsTapDenied(unit) and UnitCanAttack("player", unit)
 
 	-- If the unit is dead or offline, we can skip a lot of stuff, 
 	-- so we're making an exception for this early on. 
@@ -403,7 +420,7 @@ local Update = function(self, event, unit)
 		local maxAbsorb = health.maxAbsorb or maxAbsorbDisplaySize
 		local hasOverAbsorb = (allAbsorbs > 0) and (curHealth + allIncomingHeal + allAbsorbs >= maxHealth)
 		local absorbDisplay = (allAbsorbs > maxHealth*maxAbsorb) and maxHealth*maxAbsorb or allAbsorbs
-		if (absorbDisplay < maxHealth * (health.absorbThreshold or .1)) then 
+		if (absorbDisplay < maxHealth * (health.absorbThreshold or .05)) then 
 			absorbDisplay = 0
 		end
 
@@ -560,10 +577,8 @@ local Enable = function(self)
 		health.PostUpdateStatusBarTexture = UpdateStatusBarTextures
 		health.PostUpdateTexCoord = UpdateTexCoords
 
-		-- IsRetailShadowlands
-
 		-- Health events
-		if (health.frequent) and (not IsRetailShadowlands) then
+		if (health.frequent) and (not IsRetail) then
 			self:RegisterEvent("UNIT_HEALTH_FREQUENT", Proxy)
 		else
 			self:RegisterEvent("UNIT_HEALTH", Proxy)
@@ -608,13 +623,14 @@ local Enable = function(self)
 			end 
 	
 			if (not health.Absorb) then 
+				local absorbAlpha = (string_find(unit, "raid") or string_find(unit, "party")) and .5 or ((unit == "player") or (unit == "target")) and .35 or .25
 				local absorb = health:CreateStatusBar()
 				absorb._owner = health
 				absorb:SetAllPoints(health)
 				absorb:SetFrameLevel(health:GetFrameLevel() + 3)
 				absorb:SetSparkTexture(health:GetSparkTexture())
 				absorb:SetStatusBarColor(1, 1, 1)
-				absorb:SetAlpha((string_find(unit, "raid") or string_find(unit, "party")) and .5 or ((unit == "player") or (unit == "target")) and .35 or .25)
+				absorb:SetAlpha(health.absorbOverrideAlpha or absorbAlpha)
 				health.Absorb = absorb
 			end 
 		end
@@ -674,5 +690,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Health", Enable, Disable, Proxy, 53)
+	Lib:RegisterElement("Health", Enable, Disable, Proxy, 59)
 end 

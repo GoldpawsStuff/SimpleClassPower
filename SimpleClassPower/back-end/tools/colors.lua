@@ -5,7 +5,7 @@ which the requesting module can edit or add to later.
 
 --]]--
 
-local LibColorTool = Wheel:Set("LibColorTool", 2)
+local LibColorTool = Wheel:Set("LibColorTool", 3)
 if (not LibColorTool) then
 	return
 end
@@ -30,7 +30,6 @@ local CreateFont = CreateFont
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
 local IsRetail = LibClientBuild:IsRetail()
-local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Library registries
 LibColorTool.embeds = LibColorTool.embeds or {}
@@ -350,6 +349,7 @@ Colors.quality[8] = createColor( 79/255, 196/255, 225/255) -- Blizard
 -- world quest quality coloring
 -- *using item rarities for these colors
 -- *the globals I use for reference are gone in 9.0.1.
+-- *change to Enums. Will look them up!
 Colors.worldquestquality = {}
 Colors.worldquestquality[LE_WORLD_QUEST_QUALITY_COMMON or 1] = Colors.quality[1]
 Colors.worldquestquality[LE_WORLD_QUEST_QUALITY_RARE or 2] = Colors.quality[3]

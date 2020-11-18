@@ -1,4 +1,4 @@
-local LibFader = Wheel:Set("LibFader", 39)
+local LibFader = Wheel:Set("LibFader", 41)
 if (not LibFader) then	
 	return
 end
@@ -61,7 +61,6 @@ local UnregisterAttributeDriver = UnregisterAttributeDriver
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
 local IsRetail = LibClientBuild:IsRetail()
-local IsRetailShadowlands = LibClientBuild:IsRetailShadowlands()
 
 -- Sourced from FrameXML/BuffFrame.lua
 local DEBUFF_MAX_DISPLAY = DEBUFF_MAX_DISPLAY
@@ -562,8 +561,10 @@ LibFader.ClearTimerData = function(self)
 	self.totalElapsed = 0
 	self.totalElapsedIn = 0
 	self.totalElapsedOut = 0
-	self.totalDurationIn = .15
-	self.totalDurationOut = .75
+	self.totalDurationIn = self.totalDurationInOverride or .15
+	self.totalDurationOut = self.totalDurationOutOverride or .75
+	self.totalDurationHold = self.totalDurationHoldOverride or 0
+	self.totalDurationHoldCounter = 0
 	self.currentPosition = 1
 	self.achievedState = "peril"
 end
@@ -573,10 +574,30 @@ LibFader.ValidateTimerData = function(self)
 	self.totalElapsed = 0
 	self.totalElapsedIn = 0
 	self.totalElapsedOut = 0
-	self.totalDurationIn = .15
-	self.totalDurationOut = .75
+	self.totalDurationIn = self.totalDurationInOverride or .15
+	self.totalDurationOut = self.totalDurationOutOverride or .75
+	self.totalDurationHold = self.totalDurationHoldOverride or 0
+	self.totalDurationHoldCounter = 0
 	self.currentPosition = self.currentPosition or 1
 	self.achievedState = self.achievedState or "peril"
+end
+
+LibFader.SetObjectFadeDurationIn = function(self, seconds)
+	check(seconds, 1, "number")
+	LibFader.totalDurationIn = seconds
+	LibFader.totalDurationInOverride = seconds
+end
+
+LibFader.SetObjectFadeDurationOut = function(self, seconds)
+	check(seconds, 1, "number")
+	LibFader.totalDurationOut = seconds
+	LibFader.totalDurationOutOverride = seconds
+end 
+
+LibFader.SetObjectFadeHold = function(self, seconds)
+	check(seconds, 1, "number")
+	LibFader.totalDurationHold = seconds
+	LibFader.totalDurationHoldOverride = seconds
 end
 
 LibFader.InitiateDelay = function(self, elapsed)
@@ -641,6 +662,7 @@ LibFader.OnUpdate = function(self, elapsed)
 		else 
 			self.currentPosition = 1
 			self.achievedState = "peril"
+			self.totalDurationHoldCounter = self.totalDurationHold
 			self:ForAll(SetToDefaultAlpha)
 			if (oldState ~= self.achievedState) then
 				LibModule:AddDebugMessageFormatted(string_format("FaderState achieved: '%s'", self.achievedState))
@@ -648,6 +670,15 @@ LibFader.OnUpdate = function(self, elapsed)
 			end
 		end 
 	else 
+		if (self.currentPosition == 1) and (self.achievedState == "peril") and (self.totalDurationHoldCounter > 0) then 
+			if ((self.totalDurationHoldCounter - self.elapsed) > 0) then
+				self.totalDurationHoldCounter = self.totalDurationHoldCounter - self.elapsed
+				self.elapsed = 0
+				return
+			else
+				self.totalDurationHoldCounter = 0
+			end
+		end
 		local progress = self.elapsed / self.totalDurationOut
 		if ((self.currentPosition - progress) > 0) then 
 			self.currentPosition = self.currentPosition - progress
@@ -682,6 +713,9 @@ LibFader.ForAll = function(self, method, ...)
 end
 
 local embedMethods = {
+	SetObjectFadeHold = true,
+	SetObjectFadeDurationIn = true,
+	SetObjectFadeDurationOut = true,
 	SetObjectFadeOverride = true, 
 	RegisterObjectFade = true,
 	UnregisterObjectFade = true,
@@ -710,13 +744,7 @@ LibFader:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEvent")
 LibFader:RegisterEvent("PLAYER_REGEN_ENABLED", "OnEvent") 
 LibFader:RegisterEvent("PLAYER_TARGET_CHANGED", "OnEvent") 
 LibFader:RegisterEvent("GROUP_ROSTER_UPDATE", "OnEvent") 
-
-if (IsRetailShadowlands) then
-	LibFader:RegisterUnitEvent("UNIT_HEALTH", "OnEvent", "player") 
-else
-	LibFader:RegisterUnitEvent("UNIT_HEALTH_FREQUENT", "OnEvent", "player") 
-end
-
+LibFader:RegisterUnitEvent("UNIT_HEALTH", "OnEvent", "player") 
 LibFader:RegisterUnitEvent("UNIT_POWER_FREQUENT", "OnEvent", "player") 
 LibFader:RegisterUnitEvent("UNIT_DISPLAYPOWER", "OnEvent", "player") 
 LibFader:RegisterMessage("GP_UNIT_AURA", "OnEvent")
