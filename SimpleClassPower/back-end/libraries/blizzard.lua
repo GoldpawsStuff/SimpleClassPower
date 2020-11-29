@@ -1,4 +1,4 @@
-local LibBlizzard = Wheel:Set("LibBlizzard", 61)
+local LibBlizzard = Wheel:Set("LibBlizzard", 63)
 if (not LibBlizzard) then 
 	return
 end
@@ -848,12 +848,16 @@ UIWidgetsDisable["Tutorials"] = function(self)
 				--Class_Intro_CombatTactics:UnregisterAllEvents()
 				SetCVar("showNPETutorials", "0")
 				kill("NPE_TutorialMainFrame_Frame", false, true)
+				kill("NPE_TutorialKeyboardMouseFrame_Frame", false, true)
 				kill("TutorialPointerFrame", false, true)
 				kill("Tutorial_PointerUp", false, true)
 				kill("Tutorial_PointerDown", false, true)
 				kill("Tutorial_PointerLeft", false, true)
 				kill("Tutorial_PointerRight", false, true)
 				KillPointerFrames()
+				Class_Hide_Minimap.OnBegin = nil
+				Minimap:Show()
+				MinimapCluster:Show()
 			end
 			--if (NPE_TutorialPointerFrame) then
 			--	NPE_TutorialPointerFrame.Show = function() end

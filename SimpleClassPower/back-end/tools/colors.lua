@@ -196,7 +196,7 @@ Colors.blizzclass = createColorGroup(RAID_CLASS_COLORS)
 Colors.class = {}
 Colors.class.DEATHKNIGHT = createColor(176/255, 31/255, 79/255)
 Colors.class.DEMONHUNTER = createColor(163/255, 48/255, 201/255)
-Colors.class.DRUID = createColor(255/255, 125/255, 10/255)
+Colors.class.DRUID = createColor(225/255, 125/255, 35/255)
 Colors.class.HUNTER = createColor(191/255, 232/255, 115/255) 
 Colors.class.MAGE = createColor(105/255, 204/255, 240/255)
 Colors.class.MONK = createColor(0/255, 255/255, 150/255)
@@ -244,6 +244,17 @@ Colors.power.HOLY_POWER = createColor(245/255, 254/255, 145/255) -- Retribution 
 Colors.power.RUNES = createColor(100/255, 155/255, 225/255) -- Death Knight 
 Colors.power.SOUL_FRAGMENTS = createColor(148/255, 130/255, 201/255) -- Demon Hunter
 Colors.power.SOUL_SHARDS = createColor(148/255, 130/255, 201/255) -- Warlock 
+
+-- Coloring when modules use a different color for each point.
+-- Weirdly enough we're only using to to produce an alternate color.
+-- This will be changed later, it was just the fastest way to a goal right now.
+Colors.power.COMBO_POINTS_MULTIPLE = {
+	createColor(225/255, 65/255, 30/255), 
+	createColor(225/255, 65/255, 30/255), 
+	createColor(225/255, 65/255, 30/255), 
+	createColor(225/255, 65/255, 30/255), 
+	createColor(225/255, 65/255, 30/255) 
+}
 
 -- Alternate Power
 Colors.power.ALTERNATE = createColor(70/255, 255/255, 131/255)

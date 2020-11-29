@@ -1,4 +1,4 @@
-local LibFader = Wheel:Set("LibFader", 41)
+local LibFader = Wheel:Set("LibFader", 44)
 if (not LibFader) then	
 	return
 end
@@ -283,7 +283,7 @@ LibFader.SetObjectAlpha = function(self, object, alpha)
 end 
 
 LibFader.CheckMouse = function(self)
-	if (SpellFlyout and SpellFlyout:IsShown()) then 
+	if (SpellFlyout and SpellFlyout:IsVisible()) then 
 		Data.mouseOver = true 
 		return true
 	end 
@@ -291,12 +291,12 @@ LibFader.CheckMouse = function(self)
 		if (object and not object.ignoreMouse) then
 			if (object.GetExplorerHitRects) then 
 				local top, bottom, left, right = object:GetExplorerHitRects()
-				if (object:IsMouseOver(top, bottom, left, right) and object:IsShown()) then 
+				if (object:IsMouseOver(top, bottom, left, right) and object:IsVisible()) then 
 					Data.mouseOver = true 
 					return true
 				end 
 			else 
-				if (object:IsMouseOver() and object:IsShown()) then 
+				if (object:IsMouseOver() and object:IsVisible()) then 
 					Data.mouseOver = true 
 					return true
 				end 
@@ -545,11 +545,8 @@ LibFader.OnEvent = function(self, event, ...)
 	elseif (event == "UNIT_HEALTH_FREQUENT") or (event == "UNIT_HEALTH") then 
 		self:CheckHealth()
 
-	elseif (event == "GP_UNIT_AURA") then 
-		local unit = ...
-		if (unit == "player") then
-			self:CheckAuras()
-		end
+	elseif (event == "UNIT_AURA") then 
+		self:CheckAuras()
 
 	elseif (event == "ZONE_CHANGED_NEW_AREA") then 
 		self:CheckInstance()
@@ -747,7 +744,7 @@ LibFader:RegisterEvent("GROUP_ROSTER_UPDATE", "OnEvent")
 LibFader:RegisterUnitEvent("UNIT_HEALTH", "OnEvent", "player") 
 LibFader:RegisterUnitEvent("UNIT_POWER_FREQUENT", "OnEvent", "player") 
 LibFader:RegisterUnitEvent("UNIT_DISPLAYPOWER", "OnEvent", "player") 
-LibFader:RegisterMessage("GP_UNIT_AURA", "OnEvent")
+LibFader:RegisterUnitEvent("UNIT_AURA", "OnEvent", "player", "vehicle")
 
 if (IsRetail) then
 	LibFader:RegisterEvent("PLAYER_FOCUS_CHANGED", "OnEvent") 

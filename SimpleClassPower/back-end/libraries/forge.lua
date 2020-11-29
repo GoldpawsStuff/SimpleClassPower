@@ -1,4 +1,4 @@
-local LibForge = Wheel:Set("LibForge", 14)
+local LibForge = Wheel:Set("LibForge", 16)
 if (not LibForge) then
 	return
 end
@@ -48,13 +48,18 @@ end
 local trackParentKeys = function(object, path)
 	local target = object
 	if (path) then 
-		if (string_find(path, ",")) then
+		if (type(path) == "string") and (string_find(path, ",")) then
 			local trail = { string_split(",", path) }
 			for _,nextPath in ipairs(trail) do
 				if (nextPath == "self") then
 					target = object
 				else
-					target = target[nextPath]
+					if (target[nextPath]) then
+						target = target[nextPath]
+					else
+						-- Dev debugging here. My schematics need it!
+						error("Forge: The key '"..(nextPath or "undefined").."' does not exist in the object '"..(object:GetName() or "unnamed").."'.")
+					end
 				end
 			end
 		else
