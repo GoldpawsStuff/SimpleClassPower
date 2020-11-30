@@ -15,6 +15,7 @@ Type **/scp** to open the options window!
 * Arcane Charges *(Arcane Mages)*
 * Holy Power *(Retribution Paladins)*
 * Soul Shards *(Warlocks)*
+* Soul Fragments *(Demon Hunters)*
 * Chi *(Windwalker Monk)*
 * Stagger *(Brewmaster Monk)*
 * Runes *(Death Knights)*
