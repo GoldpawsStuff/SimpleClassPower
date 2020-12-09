@@ -1,4 +1,4 @@
-local LibBlizzard = Wheel:Set("LibBlizzard", 63)
+local LibBlizzard = Wheel:Set("LibBlizzard", 64)
 if (not LibBlizzard) then 
 	return
 end

@@ -1,4 +1,4 @@
-local LibNamePlate = Wheel:Set("LibNamePlate", 61)
+local LibNamePlate = Wheel:Set("LibNamePlate", 64)
 if (not LibNamePlate) then	
 	return
 end
@@ -871,6 +871,12 @@ LibNamePlate.CreateNamePlate = function(self, baseFrame, name)
 		local unitFrame = self.baseFrame.UnitFrame
 		if (unitFrame) then
 			unitFrame:Hide()
+			-- 9.0.1 widget container.
+			-- Will style it later, just need it visible now.
+			self.widgetContainer = unitFrame.WidgetContainer
+			if (self.widgetContainer) then
+				self.widgetContainer:SetParent(self)
+			end
 			if (not self.hasHideScripts) then
 				unitFrame:HookScript("OnShow", function() unitFrame:Hide() end) 
 				self.hasHideScripts = true
@@ -1146,28 +1152,47 @@ LibNamePlate.OnUpdate = function(self, elapsed)
 	-- Does a mouseover unit exist?
 	local hasMouseOver = UnitExists("mouseover")
 
-	-- Is a frame currently highlighted?
-	local previousHighlight = self.currentHighlight
+	-- Is a frame currently highlighted, 
+	-- and if so, should it remain that way?
+	local currentHighlight = self.currentHighlight
+	if (currentHighlight) then
+		local shouldClearCurrent
+		if (hasMouseOver) then 
+			-- Is the current mouseover the same as last time? 
+			-- *The unit can have been cleared since last iteration,
+			--  so it makes sense to check for the unit before the API call.
+			local isMouseOver = (currentHighlight.unit) and UnitIsUnit("mouseover", currentHighlight.unit)
+			if (isMouseOver) then
+				-- This will prevent the alpha loop below
+				-- from wasting time on checking for mouseover units.
+				hasMouseOver = nil
+			else
+				-- There is a highlighted plate, 
+				-- but it isn't this one. 
+				shouldClearCurrent = true
+			end
+		else
+			-- No current mouseover at all, 
+			-- send signal to clear the current one.
+			shouldClearCurrent = true
+		end
+		-- We have a new highlighted frame, 
+		-- so fire the old one's leave script,
+		-- and clear the reference.
+		if (shouldClearCurrent) then
+			currentHighlight:OnLeave()
+			currentHighlight = nil
+		end
+	end
 	
-	-- Flag to track discovery in the current iteration
-	local currentHighlight
-
 	-- Iterate!
 	for plate, baseFrame in pairs(visiblePlates) do
 
-		if (plate.unit) then
-			if (previousHighlight) then
-				if (previousHighlight == plate) and ((not hasMouseOver) or (not UnitIsUnit("mouseover", plate.unit))) then
-					plate:OnLeave()
-					previousHighlight = nil
-				end
-			end
-			if (not currentHighlight) then
-				if (hasMouseOver) and (previousHighlight ~= plate) and (UnitIsUnit("mouseover", plate.unit)) then
-					self.currentHighlight = plate
-					plate:OnEnter()
-					currentHighlight = plate
-				end
+		if (hasMouseOver) and (not currentHighlight) then
+			if (plate.unit) and (UnitIsUnit("mouseover", plate.unit)) then
+				hasMouseOver = nil -- save all the time we can
+				currentHighlight = plate -- save the reference for later
+				currentHighlight:OnEnter() -- run the enter script
 			end
 		end
 
@@ -1222,6 +1247,7 @@ LibNamePlate.OnUpdate = function(self, elapsed)
 		end
 	end	
 
+	self.currentHighlight = currentHighlight
 	self.elapsed = 0
 end 
 
