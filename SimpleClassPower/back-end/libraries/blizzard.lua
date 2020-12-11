@@ -1,4 +1,4 @@
-local LibBlizzard = Wheel:Set("LibBlizzard", 64)
+local LibBlizzard = Wheel:Set("LibBlizzard", 75)
 if (not LibBlizzard) then 
 	return
 end
@@ -27,6 +27,7 @@ local error = error
 local pairs = pairs
 local select = select
 local string_format = string.format
+local string_gsub = string.gsub
 local string_join = string.join
 local string_match = string.match
 local type = type
@@ -1337,12 +1338,459 @@ or IsRetail and function(self, ...)
 	local WorldMapOnShow
 
 	local smallerMapScale, mapSized = .8
+	local colorCode = string_format("|cff%02x%02x%02x", 255, 234, 137)
+	local L_PLAYER, L_MOUSE = PLAYER, MOUSE_LABEL
+
+	local GetBestMapForUnit = C_Map.GetBestMapForUnit
+	local GetPlayerMapPosition = C_Map.GetPlayerMapPosition
+	local GetFormattedCoordinates = function(x, y)
+		-- Since 9.0.1, color codes can be nested, so this works.
+		return 	string_gsub(string_format("|cfff0f0f0%.2f|r", x*100), "%.(.+)", "|cffa0a0a0.%1|r"),
+				string_gsub(string_format("|cfff0f0f0%.2f|r", y*100), "%.(.+)", "|cffa0a0a0.%1|r")
+	end 
+
+	local Coordinates = CreateFrame("Frame", nil, WorldMapFrame)
+	Coordinates:SetFrameStrata(WorldMapFrame.BorderFrame:GetFrameStrata())
+	Coordinates:SetFrameLevel(WorldMapFrame.BorderFrame:GetFrameLevel() + 10)
+	Coordinates.elapsed = 0
+
+	local PlayerCoordinates = Coordinates:CreateFontString()
+	PlayerCoordinates:SetFontObject(Game13Font_o1)
+	PlayerCoordinates:SetTextColor(255/255, 234/255, 137/255)
+	PlayerCoordinates:SetAlpha(.85)
+	PlayerCoordinates:SetDrawLayer("OVERLAY")
+	PlayerCoordinates:SetJustifyH("LEFT")
+	PlayerCoordinates:SetJustifyV("BOTTOM")
+
+	local CursorCoordinates = Coordinates:CreateFontString()
+	CursorCoordinates:SetFontObject(Game13Font_o1)
+	CursorCoordinates:SetTextColor(255/255, 234/255, 137/255)
+	CursorCoordinates:SetAlpha(.85)
+	CursorCoordinates:SetDrawLayer("OVERLAY")
+	CursorCoordinates:SetJustifyH("RIGHT")
+	CursorCoordinates:SetJustifyV("BOTTOM")
+
+	-- Please note that this is NOT supposed to be a list of all zones, 
+	-- so don't dig into this code and assume anything is missing.
+	-- This is a list for the custom styling element, 
+	-- telling which zone maps have a free bottom left corner.
+	-- 
+	-- /dump WorldMapFrame.mapID
+	local BottomLeft = {
+
+		-- Overview Maps
+		[ 947] = true, -- Azeroth
+		[ 619] = true, -- Broken Isles
+		[ 572] = true, -- Draenor
+		[  12] = true, -- Kalimdor
+		[  13] = true, -- Eastern Kingdoms
+		[1550] = true, -- Kalimdor
+		[ 113] = true, -- Northrend
+		[1550] = true, -- Shadowlands
+		[ 948] = true, -- The Maelstrom
+
+		-- Cities
+		[ 103] = true, -- Exodar
+		[  87] = true, -- Ironforge
+		[  85] = true, -- Orgrimmar
+		[ 110] = true, -- Silvermoon City
+		[ 218] = true, -- Ruins of Gilneas City
+		[  84] = true, -- Stormwind
+		[  88] = true, -- Thunder Bluff
+
+		-- Eastern Kingdoms
+		[  15] = true, -- Badlands
+		[  17] = true, -- Blasted Lands
+		[  36] = true, -- Burning Steppes
+		[  42] = true, -- Deadwind Pass
+		[  27] = true, -- Dun Morogh
+		[  47] = true, -- Duskwood
+		[  23] = true, -- Eastern Plaguelands
+		[  37] = true, -- Elwynn Forest
+		[  94] = true, -- Eversong Woods
+		[  95] = true, -- Ghostlands
+		[  25] = true, -- Hillsbrad Foothills
+		[  26] = true, -- Hinterlands
+		[ 122] = true, -- Isle of Quel'Danas
+		[  48] = true, -- Loch Modan
+		[  49] = true, -- Redridge Mountains
+		[ 217] = true, -- Ruins of Gilneas
+		[  32] = true, -- Searing Gorge
+		[  21] = true, -- Silverpine Forest
+		[ 224] = true, -- Stranglethorn Vale
+		[  51] = true, -- Swamp of Sorrows
+		[  18] = true, -- Tirisfal Glades
+		[ 244] = true, -- Tol Barad
+		[ 245] = true, -- Tol Barad Peninsula
+		[ 241] = true, -- Twilight Highlands
+		[ 203] = true, -- Vashj'ir
+		[  22] = true, -- Western Plaguelands
+		[  52] = true, -- Westfall
+		[  56] = true, -- Wetlands
+
+		-- Kalimdor
+
+		-- The Maelstrom
+		[ 207] = true, -- Deepholm
+		[ 194] = true, -- Kezan
+		[ 174] = true, -- The Lost Isles
+
+		-- Northrend Zones
+		[ 114] = true, -- Borean Tundra
+		[ 127] = true, -- Crystalsong Forest
+		[ 115] = true, -- Dragonblight
+		[ 116] = true, -- Grizzly Hills
+		[ 118] = true, -- Icecrown
+		[ 117] = true, -- Howling Fjord
+		[ 119] = true, -- Sholazar Basin
+		[ 120] = true, -- The Storm Peaks
+		[ 123] = true, -- Wintergrasp
+		[ 121] = true, -- Zul'Drak
+
+		-- Draenor Zones
+		[ 588] = true, -- Ashran
+		[ 525] = true, -- Frostfire Ridge
+		[ 543] = true, -- Gorgrond
+		[ 550] = true, -- Nagrand
+		[ 539] = true, -- Shadowmoon Valley
+		[ 542] = true, -- Spires of Arak
+		[ 535] = true, -- Talador
+		[ 543] = true, -- Tanaan Jungle
+
+		-- Shadowlands Zones
+		-- https://wow.gamepedia.com/UiMapID
+		[1643] = true, 
+		[1645] = true, 
+		[1647] = true, 
+		[1658] = true, 
+		[1666] = true, 
+		[1705] = true, 
+		[1726] = true, 
+		[1727] = true, 
+		[1728] = true, 
+		[1762] = true, 
+		[1525] = true, 
+		[1533] = true, 
+		[1536] = true, 
+		[1543] = true, 
+		[1565] = true, 
+		[1569] = true, 
+		[1603] = true, 
+		[1648] = true, 
+		[1656] = true, 
+		[1659] = true, 
+		[1661] = true, 
+		[1670] = true, 
+		[1671] = true, 
+		[1672] = true, 
+		[1673] = true, 
+		[1688] = true, 
+		[1689] = true, 
+		[1734] = true, 
+		[1738] = true, 
+		[1739] = true, 
+		[1740] = true, 
+		[1741] = true, 
+		[1742] = true, 
+		[1813] = true, 
+		[1814] = true, 
+		[1615] = true, 
+		[1616] = true, 
+		[1617] = true, 
+		[1618] = true, 
+		[1619] = true, 
+		[1620] = true, 
+		[1621] = true, 
+		[1623] = true, 
+		[1624] = true, 
+		[1627] = true, 
+		[1628] = true, 
+		[1629] = true, 
+		[1630] = true, 
+		[1631] = true, 
+		[1632] = true, 
+		[1635] = true, 
+		[1636] = true, 
+		[1641] = true, 
+		[1712] = true, 
+		[1716] = true, 
+		[1720] = true, 
+		[1721] = true, 
+		[1736] = true, 
+		[1749] = true, 
+		[1751] = true, 
+		[1752] = true, 
+		[1753] = true, 
+		[1754] = true, 
+		[1756] = true, 
+		[1757] = true, 
+		[1758] = true, 
+		[1759] = true, 
+		[1760] = true, 
+		[1761] = true, 
+		[1763] = true, 
+		[1764] = true, 
+		[1765] = true, 
+		[1766] = true, 
+		[1767] = true, 
+		[1768] = true, 
+		[1769] = true, 
+		[1770] = true, 
+		[1771] = true, 
+		[1772] = true, 
+		[1773] = true, 
+		[1774] = true, 
+		[1776] = true, 
+		[1777] = true, 
+		[1778] = true, 
+		[1779] = true, 
+		[1780] = true, 
+		[1781] = true, 
+		[1782] = true, 
+		[1783] = true, 
+		[1784] = true, 
+		[1785] = true, 
+		[1786] = true, 
+		[1787] = true, 
+		[1788] = true, 
+		[1789] = true, 
+		[1791] = true, 
+		[1792] = true, 
+		[1793] = true, 
+		[1794] = true, 
+		[1795] = true, 
+		[1796] = true, 
+		[1797] = true, 
+		[1798] = true, 
+		[1799] = true, 
+		[1800] = true, 
+		[1801] = true, 
+		[1802] = true, 
+		[1803] = true, 
+		[1804] = true, 
+		[1805] = true, 
+		[1806] = true, 
+		[1807] = true, 
+		[1808] = true, 
+		[1809] = true, 
+		[1810] = true, 
+		[1811] = true, 
+		[1812] = true, 
+		[1820] = true, 
+		[1821] = true, 
+		[1822] = true, 
+		[1823] = true, 
+		[1833] = true, 
+		[1834] = true, 
+		[1835] = true, 
+		[1836] = true, 
+		[1837] = true, 
+		[1838] = true, 
+		[1839] = true, 
+		[1840] = true, 
+		[1841] = true, 
+		[1842] = true, 
+		[1843] = true, 
+		[1844] = true, 
+		[1845] = true, 
+		[1846] = true, 
+		[1847] = true, 
+		[1848] = true, 
+		[1849] = true, 
+		[1850] = true, 
+		[1851] = true, 
+		[1852] = true, 
+		[1853] = true, 
+		[1854] = true, 
+		[1855] = true, 
+		[1856] = true, 
+		[1857] = true, 
+		[1858] = true, 
+		[1859] = true, 
+		[1860] = true, 
+		[1861] = true, 
+		[1862] = true, 
+		[1863] = true, 
+		[1864] = true, 
+		[1865] = true, 
+		[1867] = true, 
+		[1868] = true, 
+		[1869] = true, 
+		[1870] = true, 
+		[1871] = true, 
+		[1872] = true, 
+		[1873] = true, 
+		[1874] = true, 
+		[1875] = true, 
+		[1876] = true, 
+		[1877] = true, 
+		[1878] = true, 
+		[1879] = true, 
+		[1880] = true, 
+		[1881] = true, 
+		[1882] = true, 
+		[1883] = true, 
+		[1884] = true, 
+		[1885] = true, 
+		[1886] = true, 
+		[1887] = true, 
+		[1888] = true, 
+		[1889] = true, 
+		[1890] = true, 
+		[1891] = true, 
+		[1892] = true, 
+		[1893] = true, 
+		[1894] = true, 
+		[1895] = true, 
+		[1896] = true, 
+		[1897] = true, 
+		[1898] = true, 
+		[1899] = true, 
+		[1900] = true, 
+		[1901] = true, 
+		[1902] = true, 
+		[1903] = true, 
+		[1904] = true, 
+		[1905] = true, 
+		[1907] = true, 
+		[1908] = true, 
+		[1909] = true, 
+		[1910] = true, 
+		[1911] = true, 
+		[1912] = true, 
+		[1913] = true, 
+		[1914] = true, 
+		[1920] = true, 
+		[1921] = true, 
+		[1663] = true, 
+		[1664] = true, 
+		[1665] = true, 
+		[1675] = true, 
+		[1676] = true, 
+		[1699] = true, 
+		[1700] = true, 
+		[1735] = true, 
+		[1744] = true, 
+		[1745] = true, 
+		[1746] = true, 
+		[1747] = true, 
+		[1748] = true, 
+		[1750] = true, 
+		[1755] = true, 
+		[1649] = true, 
+		[1650] = true, 
+		[1651] = true, 
+		[1652] = true, 
+		[1674] = true, 
+		[1683] = true, 
+		[1684] = true, 
+		[1685] = true, 
+		[1686] = true, 
+		[1687] = true, 
+		[1697] = true, 
+		[1698] = true, 
+		[1724] = true, 
+		[1725] = true, 
+		[1667] = true, 
+		[1668] = true, 
+		[1690] = true, 
+		[1692] = true, 
+		[1693] = true, 
+		[1694] = true, 
+		[1695] = true, 
+		[1707] = true, 
+		[1708] = true, 
+		[1711] = true, 
+		[1713] = true, 
+		[1714] = true, 
+		[1662] = true, 
+		[1669] = true, 
+		[1677] = true, 
+		[1678] = true, 
+		[1679] = true, 
+		[1680] = true, 
+		[1701] = true, 
+		[1702] = true, 
+		[1703] = true, 
+		[1709] = true, 
+		[1816] = true, 
+		[1818] = true, 
+		[1819] = true, 
+		[1824] = true, 
+		[1825] = true, 
+		[1826] = true, 
+		[1827] = true, 
+		[1829] = true, 
+		[1917] = true 
+	}
+
+	Coordinates:SetScript("OnUpdate", function(self, elapsed)
+		self.elapsed = self.elapsed + elapsed
+		if (self.elapsed < .1) then 
+			return 
+		end 
+
+		if (not self.mapID) or (self.mapID ~= WorldMapFrame.mapID) then
+			PlayerCoordinates:ClearAllPoints()
+			CursorCoordinates:ClearAllPoints()
+
+			local mapID = WorldMapFrame.mapID
+			if (mapID) and (BottomLeft[mapID]) then
+
+				-- This is fine in Shadowlands, but fully fails in BfA of Legion. 
+				PlayerCoordinates:SetPoint("BOTTOMLEFT", WorldMapFrame.ScrollContainer, "BOTTOMLEFT", 16, 12)
+				CursorCoordinates:SetPoint("BOTTOMLEFT", PlayerCoordinates, "TOPLEFT", 0, 1)
+
+			else
+				-- Two lines
+				--PlayerCoordinates:SetPoint("BOTTOM", WorldMapFrame.ScrollContainer, "BOTTOM", 10, 9)
+				--CursorCoordinates:SetPoint("BOTTOM", PlayerCoordinates, "TOP", 0, 1)
+
+				-- One line
+				PlayerCoordinates:SetPoint("BOTTOMRIGHT", WorldMapFrame.ScrollContainer, "BOTTOM", -10, 9)
+				CursorCoordinates:SetPoint("BOTTOMLEFT", WorldMapFrame.ScrollContainer, "BOTTOM", 10, 9)
+			end
+			self.mapID = mapID
+		end
+
+		local uiMapID = C_Map.GetFallbackWorldMapID()
+		local info = uiMapID and C_Map.GetMapInfo(uiMapID)
+		if (info) then
+			local mapID = info.mapID
+		end
+
+		local pX, pY, cX, cY
+		local mapID = GetBestMapForUnit("player")
+		if (mapID) then 
+			local mapPosObject = GetPlayerMapPosition(mapID, "player")
+			if (mapPosObject) then 
+				pX, pY = mapPosObject:GetXY()
+			end 
+		end 
+
+		if (WorldMapFrame.ScrollContainer:IsMouseOver(0, 0, 0, 0)) then 
+			cX, cY = WorldMapFrame.ScrollContainer:GetNormalizedCursorPosition()
+		end
+
+		if (pX and pY) then 
+			PlayerCoordinates:SetFormattedText("%s:|r   %s, %s", L_PLAYER, GetFormattedCoordinates(pX, pY))
+		else 
+			PlayerCoordinates:SetFormattedText("%s:|r   |cfff0f0f0%s|r", L_PLAYER, NOT_APPLICABLE)
+		end 
+
+		if (cX and cY) then 
+			CursorCoordinates:SetFormattedText("%s:|r   %s, %s", L_MOUSE, GetFormattedCoordinates(cX, cY))
+		else
+			CursorCoordinates:SetFormattedText("%s:|r   |cfff0f0f0%s|r", L_MOUSE, NOT_APPLICABLE)
+		end 
+
+	end)
 
 	SetLargeWorldMap = function(self)
 		WorldMapFrame:SetParent(UIParent)
 		WorldMapFrame:SetScale(1)
 		WorldMapFrame.ScrollContainer.Child:SetScale(smallerMapScale)
-	
+
 		if (WorldMapFrame:GetAttribute("UIPanelLayout-area") ~= "center") then
 			SetUIPanelAttribute(WorldMapFrame, "area", "center");
 		end
@@ -1378,6 +1826,10 @@ or IsRetail and function(self, ...)
 	end
 	
 	WorldMapOnShow = function(self, event, ...)
+		-- They don't seem to stick. Weird.
+		Coordinates:SetFrameStrata(WorldMapFrame.BorderFrame:GetFrameStrata())
+		Coordinates:SetFrameLevel(WorldMapFrame.BorderFrame:GetFrameLevel() + 10)
+
 		if (mapSized) then
 			return
 		end
@@ -1402,7 +1854,7 @@ or IsRetail and function(self, ...)
 		-- Never again!
 		mapSized = true
 	end
-	
+
 	WorldMapFrame.BlackoutFrame.Blackout:SetTexture(nil)
 	WorldMapFrame.BlackoutFrame:EnableMouse(false)
 
