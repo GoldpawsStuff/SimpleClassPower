@@ -60,12 +60,27 @@ end
 
 -- Called after each class power update
 ClassPower_PostUpdate = function(element, unit, min, max, newMax, powerType)
+	if (not min) or (not max) or (not powerType) then
+		element:Hide()
+		return
+	end
+
+	-- Figure out the number of pills to divide the bar into.
+	-- Anything not having an exception here will default to 5.
+	local currentPillCount
+	if (powerType == "RUNES") or ((powerType == "CHI") and (UnitPowerMax("player", SPELL_POWER_CHI) == 6)) then 
+		currentPillCount = 6
+	elseif (powerType == "STAGGER") then 
+		currentPillCount = 3
+	else
+		currentPillCount = 5
+	end 
 
 	-- Retrieve the stylesheet
 	local layout = UnitFramePlayerHUD
 
 	-- Make sure the resources are centered
-	local elementWidth = (powerType == "RUNES" and 6 or powerType == "STAGGER" and 3 or 5) * layout.ClassPowerPointSize[1]
+	local elementWidth = currentPillCount * layout.ClassPowerPointSize[1]
 	if elementWidth ~= element.width then 
 		element:SetWidth(elementWidth)
 		element.width = elementWidth

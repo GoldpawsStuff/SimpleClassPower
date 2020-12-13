@@ -1,4 +1,4 @@
-local LibBagButton = Wheel:Set("LibBagButton", 17)
+local LibBagButton = Wheel:Set("LibBagButton", 18)
 if (not LibBagButton) then	
 	return
 end
@@ -303,7 +303,7 @@ LibBagButton.SpawnItemButton = function(self, bagType)
 		return error(string_format("No bagType named '%d' exists!", bagID))
 	end
 
-	local button -- vertual button object returned to the user
+	local button -- virtual button object returned to the user
 	local parent -- hidden button parent for bag items
 	local slot -- slot object that contains the "actual" button
 

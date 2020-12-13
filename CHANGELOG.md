@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.20-Release] 2020-12-13
+### Changed
+- Updated back-end. 
+
+### Fixed
+- Fixed an issue with wrong names on callback events, that caused position and scale to not save.
+- Width of the movable area should adjust to monks with 6 chi now. 
+
 ## [2.1.19-Release] 2020-12-09
 - Various back-end updates and fixes.
 - Fixed faulty changelog dates. Welcome to the future.

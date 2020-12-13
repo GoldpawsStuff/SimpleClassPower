@@ -1,4 +1,4 @@
-local LibFader = Wheel:Set("LibFader", 45)
+local LibFader = Wheel:Set("LibFader", 47)
 if (not LibFader) then	
 	return
 end
@@ -172,6 +172,11 @@ elseif (IsRetail) then
 	
 		-- BfA
 		[271571] = true, -- Ready! (when doing the "Shell Game" world quests) -- added 8.0.1
+
+		-- Shadowlands
+		-- Night Fae Covenant
+		[320227] = true, -- Depleted Shell 
+		[329492] = true, -- Slumberwood Band 
 	}
 end
 
@@ -633,7 +638,7 @@ LibFader.OnUpdate = function(self, elapsed)
 	if self.FORCED
 	or Data.inCombat 
 	or Data.hasTarget 
-	or Data.hasFocus 
+	--or Data.hasFocus 
 	or (Data.inGroup and Data.disableGroupFade)
 	or Data.hasOverride 
 	or Data.hasPossess 

@@ -1,69 +1,26 @@
 local ADDON, Private = ...
 local L = Wheel("LibLocale"):GetLocale(ADDON)
-local Module = Wheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
+local Core = Wheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
 
 -- Tell the back-end what addon to look for before 
 -- initializing this module and all its submodules. 
-Module:SetAddon(ADDON) 
+Core:SetAddon(ADDON) 
 
 -- Tell the backend where our saved variables are found.
 -- *it's important that we're doing this here, before any module configs are created.
-Module:RegisterSavedVariablesGlobal(ADDON.."_DB")
+Core:RegisterSavedVariablesGlobal(ADDON.."_DB")
 
 -- Lua API
 local _G = _G
 local select = select
 local unpack = unpack
 
--- WoW API
-local GetSpecialization = _G.GetSpecialization
-
--- WoW Constants
-local SPEC_MONK_BREWMASTER = _G.SPEC_MONK_BREWMASTER or 1
-
--- Constant to track number of 
--- preview points on the draggable overlay
-local NUMPOINTS = 5
-
--- Player class constant
-local _,PlayerClass = UnitClass("player")
-
--- Default settings. 
--- Changing these have no real effect in-game, so don't. 
-local defaults = {
-	enableClassColor = false, -- use class color instead of our power colors
-	enableSmartVisibility = false -- hide when no target or unattackable
-}
-
--- Various options I've used in the development cycle, 
--- referenced here to make sure saved variables are clean. 
-local deprecated = {
-	-- We removed this because it's always the 
-	-- default fallback color, and doesn't need a setting. 
-	enablePowerColor = true, 
-
-	-- Too much hassle, maybe later. 
-	enableCustomColor = true,
-	customColor = true, 
-
-	-- We removed these because the 
-	-- addon selection for your char does the same. 
-	enableArcaneCharges = true, 
-	enableChi = true, 
-	enableComboPoints = true, 
-	enableHolyPower = true, 
-	enableRunes = true, 
-	enableSoulShards = true, 
-	enableStagger = true, 
-
-	-- I removed this beacuse I'm doing it the opposite way, 
-	-- making it always visible by default.
-	showAlways = true, 
-
-	-- Removed this to simplify it to a single option
-	hideWhenNoTarget = false, -- hide when no target exists
-	hideWhenUnattackable = false -- hiden when target is unattackable
-}
+-- Private Addon API
+local GetConfig = Private.GetConfig
+local GetFont = Private.GetFont
+local GetLayout = Private.GetLayout
+local GetMedia = Private.GetMedia
+local Colors = Private.Colors
 
 ---------------------------------------------------
 -- Additional Mover Methods
@@ -71,10 +28,10 @@ local deprecated = {
 local Mover = {}
 
 Mover.OnEnter = function(self)
-	local colors = Private.Colors
+	local colors = Colors
 	local tooltip = self:GetTooltip()
 	local bottom = self:GetBottom() 
-	local top = Module:GetFrame("UICenter"):GetHeight() - self:GetTop()
+	local top = Core:GetFrame("UICenter"):GetHeight() - self:GetTop()
 	local point = ((bottom < top) and "BOTTOM" or "TOP")
 	local rPoint = ((bottom < top) and "TOP" or "BOTTOM")
 	local offset = (bottom < top) and 20 or -20
@@ -96,10 +53,10 @@ end
 local Style = function(self, unit, id, layout, ...)
 
 	-- Get the saved settings
-	local db = Module.db
+	local db = Core.db
 
 	-- Assign our own global custom colors
-	self.colors = Private.Colors
+	self.colors = Colors
 	self.layout = layout
 
 	-- Frame
@@ -182,36 +139,26 @@ local Style = function(self, unit, id, layout, ...)
 
 end
 
-Module.Style = function(self, frame, unit, id, _, ...)
+Core.Style = function(self, frame, unit, id, _, ...)
 	return Style(frame, unit, id, self.layout, ...)
 end
 
 ---------------------------------------------------
--- Module Callbacks
+-- Callbacks
 ---------------------------------------------------
-Module.IsDefaultPosition = function(self)
+Core.IsDefaultPosition = function(self)
 	return self.mover:IsDefaultPosition()
 end 
 
-Module.IsDefaultScale = function(self)
+Core.IsDefaultScale = function(self)
 	return self.mover:IsDefaultScale()
 end 
 
-Module.IsDefaultPositionAndScale = function(self)
+Core.IsDefaultPositionAndScale = function(self)
 	return self.mover:IsDefaultPosition() and self.mover:IsDefaultScale()
 end 
 
-Module.ParseSavedSettings = function(self)
-	local db = self:NewConfig("Core", defaults, "global")
-	for key in pairs(deprecated) do 
-		if db[key] then 
-			db[key] = nil
-		end
-	end
-	return db
-end
-
-Module.PostUpdateSettings = function(self)
+Core.PostUpdateSettings = function(self)
 	local db = self.db
 	local element = self.frame.ClassPower
 
@@ -229,13 +176,13 @@ Module.PostUpdateSettings = function(self)
 	element:ForceUpdate()
 end
 
-Module.OnEvent = function(self, event, ...)
-	if (event == "CG_MOVER_UPDATED") then 
+Core.OnEvent = function(self, event, ...)
+	if (event == "GP_MOVER_UPDATED") then 
 		local mover, target, point, offsetX, offsetY = ...
 		if (mover == self.mover) and (target == self.frame) then 
 			self.db.savedPosition = { point, "UICenter", point, offsetX, offsetY }
 		end 
-	elseif (event == "CG_MOVER_SCALE_UPDATED") then 
+	elseif (event == "GP_MOVER_SCALE_UPDATED") then 
 		local mover, target, scale = ... 
 		if (mover == self.mover) and (target == self.frame) then 
 			if (self:IsDefaultScale()) then 
@@ -244,12 +191,10 @@ Module.OnEvent = function(self, event, ...)
 				self.db.savedScale = scale
 			end 
 		end
-	elseif (event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD") then 
-		NUMPOINTS = PlayerClass == "DEATHKNIGHT" and 6 or (PlayerClass == "MONK" and GetSpecialization() == SPEC_MONK_BREWMASTER) or 5
 	end
 end
 
-Module.OnChatCommand = function(self, editBox, ...)
+Core.OnChatCommand = function(self, editBox, ...)
 	local db = self.db
 	local cmd, arg = ...
 	if (cmd == "classcolor") then 
@@ -286,10 +231,13 @@ Module.OnChatCommand = function(self, editBox, ...)
 end
 
 ---------------------------------------------------
--- Module Initialization
+-- Initialization
 ---------------------------------------------------
-Module.OnInit = function(self)
-	self.db = self:ParseSavedSettings() 
+Core.OnInit = function(self)
+	
+	self:RemoveConfig("Core")
+
+	self.db = GetConfig(ADDON)
 
 	-- Retrieve the layout data
 	self.layout = self:GetDatabase(ADDON..":[UnitFramePlayerHUD]")
@@ -319,13 +267,7 @@ Module.OnInit = function(self)
 	self:RegisterChatCommand("simpleclasspower", "OnChatCommand")
 end 
 
-Module.OnEnable = function(self)
-	self:RegisterMessage("CG_MOVER_UPDATED", "OnEvent")
-	self:RegisterMessage("CG_MOVER_SCALE_UPDATED", "OnEvent")
-	if (PlayerClass == "MONK") then 
-		self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent") 
-		self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent") 
-	elseif (PlayerClass == "DEATHKNIGHT") then 
-		self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEvent") 
-	end 
+Core.OnEnable = function(self)
+	self:RegisterMessage("GP_MOVER_UPDATED", "OnEvent")
+	self:RegisterMessage("GP_MOVER_SCALE_UPDATED", "OnEvent")
 end 

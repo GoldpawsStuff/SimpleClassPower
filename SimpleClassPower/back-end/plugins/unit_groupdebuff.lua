@@ -1,39 +1,93 @@
 local LibAura = Wheel("LibAura")
 assert(LibAura, "UnitGroupDebuff requires LibAura to be loaded.")
 
+local LibClientBuild = Wheel("LibClientBuild")
+assert(LibClientBuild, "UnitCast requires LibClientBuild to be loaded.")
+
 -- Lua API
 local _G = _G
 local math_ceil = math.ceil
 local select = select
 
 -- WoW API
+local GetActiveSpecGroup = GetActiveSpecGroup
+local GetSpecialization = GetSpecialization
 local GetTime = GetTime
 local UnitCanAttack = UnitCanAttack
 local UnitClass = UnitClass
 local UnitIsCharmed = UnitIsCharmed
 
+-- Constants for client version
+local IsClassic = LibClientBuild:IsClassic()
+local IsRetail = LibClientBuild:IsRetail()
+
 -- Player Constants
 local _,playerClass = UnitClass("player")
 local playerLevel = UnitLevel("player")
 
--- Default aura types to parse for dispel classes.
-local levelFilter = ({
-	DRUID 		= { HARMFUL = { Boss = 1, Curse = 24, Poison = 14 } },
-	MAGE 		= { HARMFUL = { Boss = 1, Curse = 18 } },
-	PALADIN 	= { HARMFUL = { Boss = 1, Magic = 42, Poison = 8, Disease = 8 } },
-	PRIEST 		= { HARMFUL = { Boss = 1, Magic = 18, Disease = 14 } },
-	SHAMAN 		= { HARMFUL = { Boss = 1, Poison = 16, Disease = 22 } },
-	WARLOCK 	= { HARMFUL = { Boss = 1, Magic = 30 } } -- requires felhunter.
-})[playerClass] or { HARMFUL = { Boss = 1 } }
+-- Base filter for everybody
+local baseFilter = { 
+	HARMFUL = { Boss = true, Custom = true }, 
+	HELPFUL = { Boss = true, Custom = true } 
+}
 
-local classFilter = { HARMFUL = { Custom = 1 }, HELPFUL = { Custom = 1 } }
+-- Class specific aura filter based on learning level of the dispel.
+-- *The above is todo, all levels changed in Shadowlands. Blergh.
+-- *Also note these are defensive dispels only, not offensive like Steal Magic.
+-- 
+-- https://wow.gamepedia.com/Dispel
+local classFilter
+if (IsClassic) then
+	classFilter = ({
+		-- CLASS 	= { FILTER_TYPE = { School = Level } }
+		DRUID 		= { HARMFUL = { Curse = 1, Poison = 1 } },
+		MAGE 		= { HARMFUL = { Curse = 1 } },
+		PALADIN 	= { HARMFUL = { Magic = 1, Poison = 1, Disease = 1 } },
+		PRIEST 		= { HARMFUL = { Magic = 1, Disease = 1 } },
+		SHAMAN 		= { HARMFUL = { Poison = 1, Disease = 1 } },
+		WARLOCK 	= { HARMFUL = { Magic = 1 } } 
+	})[playerClass]
+else
+	classFilter = ({
+		-- CLASS 	= { FILTER_TYPE = { School = Level } }
+		DRUID 		= { HARMFUL = { Curse = 1, Poison = 1 } },
+		MAGE 		= { HARMFUL = { Curse = 1 } },
+		MONK 		= { HARMFUL = { Poison = 1, Disease = 1 } },
+		PALADIN 	= { HARMFUL = { Poison = 1, Disease = 1 } },
+		PRIEST 		= { HARMFUL = { Magic = 1, Disease = 1 } },
+		SHAMAN 		= { HARMFUL = { Curse = 1 } }
+	})[playerClass]
+end
+
+-- Only list dispels that require a specific spec. 
+-- *Basically this is all healer classes except priest.
+-- *Note that this ONLY applies to Retail, not Classic!
+local specFilter = (IsRetail) and ({
+	-- CLASS 	= { FILTER_TYPE = { School = SpecID } }
+	DRUID 		= { HARMFUL = { Magic = 4 } },
+	MONK 		= { HARMFUL = { Magic = 2 } },
+	PALADIN 	= { HARMFUL = { Magic = 1 } },
+	SHAMAN 		= { HARMFUL = { Magic = 3 } }
+})[playerClass]
+
 local UpdateClassFilter = function(level)
-	if (not levelFilter) then
-		return
+	if (classFilter) then
+		for filterType,schoolList in pairs(classFilter) do
+			for auraType,thresholdLevel in pairs(schoolList) do
+				--baseFilter[filterType][auraType] = (thresholdLevel <= level)
+				baseFilter[filterType][auraType] = true
+			end
+		end
 	end
-	for filterType,allowedSchools in pairs(levelFilter) do
-		for school,thresholdLevel in pairs(allowedSchools) do
-			classFilter[filterType][school] = (thresholdLevel <= level)
+	if (specFilter) then
+		local activeGroup = GetActiveSpecGroup()
+		local currentSpecID = activeGroup and GetSpecialization(false, false, activeGroup)
+		if (currentSpecID) then
+			for filterType,schoolList in pairs(specFilter) do
+				for auraType,specID in pairs(schoolList) do
+					baseFilter[filterType][auraType] = (specID == currentSpecID)
+				end
+			end
 		end
 	end
 end
@@ -224,6 +278,7 @@ local Aura_SetTimer = function(element, fullDuration, expirationTime)
 end
 
 local Update = function(self, event, unit, ...)
+	local forceUpdateFilter
 	if (event == "PLAYER_LEVEL_UP") then 
 		local level = ...
 		if (level and (level ~= playerLevel)) then
@@ -233,11 +288,12 @@ local Update = function(self, event, unit, ...)
 			end
 			UpdateClassFilter(playerLevel)
 		end
-	else
-		if (not unit) or (unit ~= self.unit) then 
-			return 
-		end 
+	elseif (event == "PLAYER_SPECIALIZATION_CHANGED") or (event == "PLAYER_TALENT_UPDATE") or (event == "CHARACTER_POINTS_CHANGED") then 
+		UpdateClassFilter(playerLevel)
 	end
+	if (not unit) or (unit ~= self.unit) then 
+		return 
+	end 
 	
 	-- Different GUID means a different player or NPC,
 	-- so we want updates to be instant, not smoothed. 
@@ -264,7 +320,7 @@ local Update = function(self, event, unit, ...)
 	local currentPrio = PRIORITY_NONE
 
 	-- Once for each filter type, as UnitAura can't list HELPFUL and HARMFUL at the same time. 
-	for filterType,allowedSchools in pairs(classFilter) do
+	for filterType,schoolList in pairs(baseFilter) do
 
 		-- Iterate auras until no more exists, 
 		-- don't rely on values that will be different in Classic and Live. 
@@ -285,7 +341,7 @@ local Update = function(self, event, unit, ...)
 			if (auraType and (not isCharmed) and (not canAttack)) then
 
 				-- Do we have a priority for the current aura?
-				local prio = allowedSchools[auraType] and priorities[auraType]
+				local prio = schoolList[auraType] and priorities[auraType]
 				if (prio and (prio > currentPrio)) then
 					newID = auraID
 					newPriority = prio
@@ -406,8 +462,13 @@ local Enable = function(self)
 			element:SetScript("OnLeave", Aura_OnLeave)
 		end
 
+		self:RegisterEvent("CHARACTER_POINTS_CHANGED", Proxy, true)
 		self:RegisterEvent("UNIT_AURA", Proxy)
-		self:RegisterEvent("PLAYER_LEVEL_UP", Proxy, true)
+
+		if (IsRetail) then
+			self:RegisterEvent("PLAYER_TALENT_UPDATE", Proxy, true)
+			self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", Proxy, true)
+		end
 
 		return true
 	end
@@ -416,8 +477,14 @@ end
 local Disable = function(self)
 	local element = self.GroupAura
 	if (element) then
+		self:UnregisterEvent("CHARACTER_POINTS_CHANGED", Proxy)
 		self:UnregisterEvent("UNIT_AURA", Proxy)
-		self:UnregisterEvent("PLAYER_LEVEL_UP", Proxy)
+
+		if (IsRetail) then
+			self:UnregisterEvent("PLAYER_TALENT_UPDATE", Proxy)
+			self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED", Proxy)
+		end
+
 		element:Hide()
 		element:SetScript("OnUpdate", nil)
 	end
@@ -425,5 +492,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("GroupAura", Enable, Disable, Proxy, 26)
+	Lib:RegisterElement("GroupAura", Enable, Disable, Proxy, 31)
 end 
