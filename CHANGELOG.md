@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.22-Release] 2020-12-14
+### Fixed
+- Back-end update to avoid bugs when used alongside Azerite UI Collection.
+
 ## [2.1.21-Release] 2020-12-13
 ### Fixed
 - The proper tools should now also be loaded for users that aren't blessed with the Azerite UI Collection.
