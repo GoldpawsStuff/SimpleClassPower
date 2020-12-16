@@ -1,4 +1,4 @@
-local LibBlizzard = Wheel:Set("LibBlizzard", 75)
+local LibBlizzard = Wheel:Set("LibBlizzard", 76)
 if (not LibBlizzard) then 
 	return
 end
@@ -1330,11 +1330,12 @@ end
 
 or IsRetail and function(self, ...)
 
-	local WorldMapFrame = WorldMapFrame
+	local WorldMapFrame = _G.WorldMapFrame
+	local UICenter = Wheel("LibFrame"):GetFrame()
 
 	local SetLargeWorldMap, SetSmallWorldMap
 	local SynchronizeDisplayState
-	local UpdateMaximizedSize, UpdateMaximizedSize
+	local UpdateMaximizedSize
 	local WorldMapOnShow
 
 	local smallerMapScale, mapSized = .8
@@ -1786,15 +1787,26 @@ or IsRetail and function(self, ...)
 
 	end)
 
+	local round = function(n) return math.floor(n + .5) end
+
+	SetSmallWorldMap = function(self)
+		local WorldMapFrame = _G.WorldMapFrame
+		if (not WorldMapFrame:IsMaximized()) then
+			WorldMapFrame:ClearAllPoints()
+			WorldMapFrame:SetPoint("TOPLEFT", UICenter, "TOPLEFT", 16, -116)
+		end
+	end
+
 	SetLargeWorldMap = function(self)
-		WorldMapFrame:SetParent(UIParent)
+		local WorldMapFrame = _G.WorldMapFrame
+		WorldMapFrame:SetParent(UICenter)
 		WorldMapFrame:SetScale(1)
 		WorldMapFrame.ScrollContainer.Child:SetScale(smallerMapScale)
 
 		if (WorldMapFrame:GetAttribute("UIPanelLayout-area") ~= "center") then
 			SetUIPanelAttribute(WorldMapFrame, "area", "center");
 		end
-	
+
 		if (WorldMapFrame:GetAttribute("UIPanelLayout-allowOtherPanels") ~= true) then
 			SetUIPanelAttribute(WorldMapFrame, "allowOtherPanels", true)
 		end
@@ -1804,58 +1816,23 @@ or IsRetail and function(self, ...)
 			WorldMapFrame.NavBar:Refresh()
 		end
 	end
-	
+
 	UpdateMaximizedSize = function(self)
+		local WorldMapFrame = _G.WorldMapFrame
 		local width, height = WorldMapFrame:GetSize()
 		local magicNumber = (1 - smallerMapScale) * 100
 		WorldMapFrame:SetSize((width * smallerMapScale) - (magicNumber + 2), (height * smallerMapScale) - 2)
 	end
 	
 	SynchronizeDisplayState = function(self)
+		local WorldMapFrame = _G.WorldMapFrame
 		if (WorldMapFrame:IsMaximized()) then
 			WorldMapFrame:ClearAllPoints()
-			WorldMapFrame:SetPoint("CENTER", UIParent)
+			WorldMapFrame:SetPoint("CENTER", UICenter)
 		end
 	end
 	
-	SetSmallWorldMap = function(self)
-		if (not WorldMapFrame:IsMaximized()) then
-			WorldMapFrame:ClearAllPoints()
-			WorldMapFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 16, -94)
-		end
-	end
-	
-	WorldMapOnShow = function(self, event, ...)
-		-- They don't seem to stick. Weird.
-		Coordinates:SetFrameStrata(WorldMapFrame.BorderFrame:GetFrameStrata())
-		Coordinates:SetFrameLevel(WorldMapFrame.BorderFrame:GetFrameLevel() + 10)
-
-		if (mapSized) then
-			return
-		end
-	
-		-- Don't do this in combat, there are secure elements here.
-		if (InCombatLockdown()) then
-			self:RegisterEvent("PLAYER_REGEN_ENABLED", WorldMapOnShow)
-			return
-	
-		-- Only ever need this event once.
-		elseif (event == "PLAYER_REGEN_ENABLED") then
-			self:UnregisterEvent(event, WorldMapOnShow)
-		end
-	
-		if (WorldMapFrame:IsMaximized()) then
-			WorldMapFrame:UpdateMaximizedSize()
-			SetLargeWorldMap()
-		else
-			SetSmallWorldMap()
-		end
-	
-		-- Never again!
-		mapSized = true
-	end
-
-	WorldMapFrame.BlackoutFrame.Blackout:SetTexture(nil)
+	WorldMapFrame.BlackoutFrame.Blackout:SetTexture()
 	WorldMapFrame.BlackoutFrame:EnableMouse(false)
 
 	self:SetSecureHook(WorldMapFrame, "Maximize", SetLargeWorldMap, "GP_SET_LARGE_WORLDMAP")
@@ -1863,7 +1840,22 @@ or IsRetail and function(self, ...)
 	self:SetSecureHook(WorldMapFrame, "SynchronizeDisplayState", SynchronizeDisplayState, "GP_SYNC_DISPLAYSTATE_WORLDMAP")
 	self:SetSecureHook(WorldMapFrame, "UpdateMaximizedSize", UpdateMaximizedSize, "GP_UPDATE_MAXIMIZED_WORLDMAP")
 
-	WorldMapFrame:HookScript("OnShow", function() WorldMapOnShow(self) end)
+	local mapSized
+	local count = 0
+	local OnShow = WorldMapFrame:GetScript("OnShow")
+	WorldMapFrame:HookScript("OnShow", function(self, event, ...)
+		count = count + 1
+		print(count)
+		local WorldMapFrame = _G.WorldMapFrame
+		if (WorldMapFrame:IsMaximized()) then
+			WorldMapFrame:UpdateMaximizedSize()
+			SetLargeWorldMap()
+		else
+			SetSmallWorldMap()
+		end
+		-- This removes any hooked scripts
+		WorldMapFrame:SetScript("OnShow", OnShow or WorldMapMixin.OnShow)
+	end)
 end
 
 -- Library Event Handling
