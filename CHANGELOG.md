@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.24-Release] 2020-12-16
+- Back-end updates.
+
 ## [2.1.23-Release] 2020-12-15
 - Back-end updates.
 
