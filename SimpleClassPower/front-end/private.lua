@@ -22,6 +22,11 @@ local GetFont = function(...) return LibFontTool:GetFont(...) end
 local GetMedia = function(name, type) return ([[Interface\AddOns\%s\media\%s.%s]]):format(ADDON, name, type or "tga") end
 
 ------------------------------------------------
+-- Custom Colors
+------------------------------------------------
+Colors.power.COMBO_POINTS = Colors:CreateColor(220/255, 68/255,  25/255) -- Rogues, Druids, Vehicles
+
+------------------------------------------------
 -- Module Defaults
 ------------------------------------------------
 -- The purpose of this is to supply all the front-end modules

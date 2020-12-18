@@ -152,6 +152,7 @@ local Update = function(self, event, unit, ...)
 	end
 
 	if (prioritizeWidgetBar) then
+		local element = self.AltPower
 
 		if (element.PreUpdate) then
 			element:PreUpdate(unit)
@@ -257,5 +258,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do
-	Lib:RegisterElement("AltPower", Enable, Disable, Proxy, 19)
+	Lib:RegisterElement("AltPower", Enable, Disable, Proxy, 20)
 end 
