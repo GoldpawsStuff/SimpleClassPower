@@ -1,4 +1,4 @@
-local LibTooltip = Wheel:Set("LibTooltip", 88)
+local LibTooltip = Wheel:Set("LibTooltip", 95)
 if (not LibTooltip) then
 	return
 end
@@ -41,6 +41,7 @@ local ipairs = ipairs
 local math_abs = math.abs
 local math_ceil = math.ceil 
 local math_floor = math.floor
+local math_mod = math.fmod
 local pairs = pairs
 local select = select 
 local setmetatable = setmetatable
@@ -519,6 +520,10 @@ Tooltip.UpdateBackdropLayout = function(self)
 		return self:OverrideBackdrop()
 	end 
 
+	if self.PreUpdateBackdrop then 
+		self:PreUpdateBackdrop()
+	end 
+
 	-- Retrieve current settings
 	local left, right, top, bottom = unpack(self:GetCValue("backdropOffsets"))
 	local barSpacing = self:GetCValue("barSpacing") 
@@ -982,7 +987,7 @@ Tooltip.SetBackdropOffset = function(self, left, right, top, bottom)
 	check(right, 2, "number")
 	check(top, 3, "number")
 	check(bottom, 4, "number")
-	self:SetCValue("backdropOffset", { left, right, top, bottom })
+	self:SetCValue("backdropOffsets", { left, right, top, bottom })
 	self:UpdateBackdropLayout()
 	self:UpdateBarLayout()
 end 
@@ -1068,6 +1073,25 @@ Tooltip.SetSmartAnchor = function(self, parent, offsetX, offsetY)
 	local top = height - parent:GetTop()
 	local point = ((bottom < top) and "BOTTOM" or "TOP") .. ((left < right) and "LEFT" or "RIGHT") 
 	local rPoint = ((bottom < top) and "TOP" or "BOTTOM") .. ((left < right) and "RIGHT" or "LEFT") 
+	
+	offsetX = (offsetX or 10) * ((left < right) and 1 or -1)
+	offsetY = (offsetY or 10) * ((bottom < top) and 1 or -1)
+
+	self:Place(point, parent, rPoint, offsetX, offsetY)
+end 
+
+Tooltip.SetSmartItemAnchor = function(self, parent, offsetX, offsetY)
+
+	-- Keyword parse the owner frame, to allow tooltips to use our custom crames. 
+	self:SetOwner(LibTooltip:GetFrame(parent), "ANCHOR_NONE")
+
+	local width, height = UIParent:GetSize()
+	local left = parent:GetLeft()
+	local right = width - parent:GetRight()
+	local bottom = parent:GetBottom() 
+	local top = height - parent:GetTop()
+	local point = ((bottom < top) and "BOTTOM" or "TOP") .. ((left < right) and "LEFT" or "RIGHT") 
+	local rPoint = ((bottom < top) and "BOTTOM" or "TOP") .. ((left < right) and "RIGHT" or "LEFT") 
 	
 	offsetX = (offsetX or 10) * ((left < right) and 1 or -1)
 	offsetY = (offsetY or 10) * ((bottom < top) and 1 or -1)
@@ -1171,6 +1195,227 @@ Tooltip.SetAction = function(self, slot)
 	end 
 end 
 
+-- General method to add item info based on data table.
+-- As items can be part of multiple tooltip types, we use this for all of them.
+local SetItemInfo = function(self, data, useSimplified)
+
+	-- Because a millionth of a second matters.
+	local colors = self.colors
+	local offwhiteR, offwhiteG, offwhiteB = colors.offwhite[1], colors.offwhite[2], colors.offwhite[3]
+
+	-- User settings
+	local colorNameAsSpell = self.colorNameAsSpellWithUse and data.itemHasUseEffect 
+	local skipItemLevel = self.hideItemLevelWithUse and data.itemHasUseEffect
+	local skipStats = self.hideStatsWithUseEffect and data.itemHasUseEffect
+	local skipBinds = self.hideBindsWithUseEffect and data.itemHasUseEffect
+	local skipUnique = self.hideUniqueWithUseEffect and data.itemHasUseEffect
+	local skipEquipAndType = self.hideEquipTypeWithUseEffect and data.itemHasUseEffect
+
+	-- Shouldn't be any bars here, but if for some reason 
+	-- the tooltip wasn't properly hidden before this, 
+	-- we make sure the bars are reset!
+	self:ClearStatusBars(true) -- suppress layout updates
+
+	-- item name and item level on top
+	if (data.itemLevel) and (not skipItemLevel) then 
+		self:AddDoubleLine(data.itemName, data.itemLevel, colors.quality[data.itemRarity][1], colors.quality[data.itemRarity][2], colors.quality[data.itemRarity][3], colors.normal[1], colors.normal[2], colors.normal[3], true)
+	elseif colorNameAsSpell then 
+		self:AddLine(data.itemName, colors.title[1], colors.title[2], colors.title[3], true)
+	else 
+		self:AddLine(data.itemName, colors.quality[data.itemRarity][1], colors.quality[data.itemRarity][2], colors.quality[data.itemRarity][3], true)
+	end 
+
+	-- item bind status
+	if (not skipBinds) then
+		if (data.itemIsBound) then 
+			self:AddLine(data.itemBind, offwhiteR, offwhiteG, offwhiteB)
+		elseif (data.itemCanBind) then
+			self:AddLine(data.itemBind, offwhiteR, offwhiteG, offwhiteB)
+		end 
+	end
+
+	-- item unique status
+	if (data.itemIsUnique) and (not skipUnique) then 
+		self:AddLine(data.itemUnique, offwhiteR, offwhiteG, offwhiteB)
+	end 
+
+	-- item equip location and type
+	if (not skipEquipAndType) then 
+		if (data.itemEquipLoc and (data.itemEquipLoc ~= "")) then 
+			local itemType
+			if data.itemType then 
+				if data.itemEquipLoc ~= "INVTYPE_TRINKET" and data.itemEquipLoc ~= "INVTYPE_FINGER" and data.itemEquipLoc ~= "INVTYPE_NECK" then 
+					itemType = data.itemSubType or data.itemType
+				end 
+			end 
+			if (itemType) then
+				self:AddDoubleLine(_G[data.itemEquipLoc], itemType, offwhiteR, offwhiteG, offwhiteB, offwhiteR, offwhiteG, offwhiteB)
+			else 
+				self:AddLine(_G[data.itemEquipLoc], offwhiteR, offwhiteG, offwhiteB)
+			end 
+		
+		elseif (data.itemType or data.itemSubType) then 
+
+			if (data.itemClassID == LE_ITEM_CLASS_MISCELLANEOUS) then 
+				-- This includes hearthstones, flight master's whistle and similar
+
+			elseif (data.itemClassID == LE_ITEM_MISCELLANEOUS_OTHER) then
+
+			elseif (data.itemClassID == LE_ITEM_CLASS_CONSUMABLE) then 
+
+				-- Subtypes usually do not have any constants to reference them by.
+				-- Source: https://wow.gamepedia.com/ItemType
+				if (data.itemSubClassID == 8) then 
+					-- "Other", used for conservatory seeds in shadowlands
+
+				else
+					-- Food, drink, flasks, etc
+					self:AddLine(data.itemSubType or data.itemType, offwhiteR, offwhiteG, offwhiteB)
+				end
+			
+			else 
+				self:AddLine(data.itemSubType or data.itemType, offwhiteR, offwhiteG, offwhiteB)
+			end 
+		end 
+	end 
+
+	if (not skipStats) then 
+
+		-- damage and speed
+		if (data.itemDamageMin and data.itemDamageMax) then 
+			if data.itemSpeed then 
+				self:AddDoubleLine(string_format(DAMAGE_TEMPLATE, math_floor(data.itemDamageMin), math_floor(data.itemDamageMax)), string_format("%s %s", ITEM_MOD_CR_SPEED_SHORT, data.itemSpeed), colors.highlight[1], colors.highlight[2], colors.highlight[3], offwhiteR, offwhiteG, offwhiteB)
+				
+			else 
+				self:AddLine(string_format(DAMAGE_TEMPLATE, math_floor(data.itemDamageMin), math_floor(data.itemDamageMax)), colors.highlight[1], colors.highlight[2], colors.highlight[3])
+			end 
+		end 
+
+		-- damage pr second
+		if data.itemDPS then 
+			self:AddLine(string_format(DPS_TEMPLATE, string_format("%.1f", data.itemDPS+.05)), colors.highlight[1], colors.highlight[2], colors.highlight[3])
+		end 
+
+		local statR, statG, statB = colors.quest.green[1], colors.quest.green[2], colors.quest.green[3] 
+		
+		-- armor 
+		if (data.itemArmor and (data.itemArmor ~= 0)) then 
+			self:AddLine(string_format("%s %s", (data.itemArmor > 0) and ("+"..tostring(data.itemArmor)) or tostring(data.itemArmor), RESISTANCE0_NAME), offwhiteR, offwhiteG, offwhiteB)
+		end 
+		
+		-- block 
+		if data.itemBlock and (data.itemBlock ~= 0) then 
+			self:AddLine(string_format("%s %s", (data.itemBlock > 0) and ("+"..tostring(data.itemBlock)) or tostring(data.itemBlock), ITEM_MOD_BLOCK_RATING_SHORT), offwhiteR, offwhiteG, offwhiteB)
+		end 
+
+		-- parry?
+
+		-- primary stats
+		if data.primaryStatValue and (data.primaryStatValue ~= 0) then 
+			self:AddLine(string_format("%s %s", (data.primaryStatValue > 0) and ("+"..tostring(data.primaryStatValue)) or tostring(data.primaryStatValue), data.primaryStat), statR, statG, statB)
+
+		end 
+		if data.primaryStats then 
+			for key,value in pairs(data.primaryStats) do 
+				self:AddLine(string_format("%s %s", (value > 0) and ("+"..tostring(value)) or tostring(value), _G[key]), statR, statG, statB)
+			end 
+		end 
+
+		-- stamina
+		if data.itemStamina and (data.itemStamina ~= 0) then 
+			self:AddLine(string_format("%s %s", (data.itemStamina > 0) and ("+"..tostring(data.itemStamina)) or tostring(data.itemStamina), ITEM_MOD_STAMINA_SHORT), statR, statG, statB)
+
+		end 
+
+		-- secondary stats
+		if data.sorted2ndStats then 
+			for _,stat in ipairs(data.sorted2ndStats) do 
+				self:AddLine(stat, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3])
+			end 
+		end 
+
+		-- no benefit stats
+		if data.uselessStats then 
+			for key,value in pairs(data.uselessStats) do 
+				self:AddLine(string_format("%s %s", (value > 0) and ("+"..tostring(value)) or tostring(value), _G[key]), colors.quest.gray[1], colors.quest.gray[2], colors.quest.gray[3])
+			end 
+		end 
+
+	end
+
+	-- description
+	local hasDescription
+	if data.itemDescription then
+		local hasDescription
+		for _,msg in ipairs(data.itemDescription) do 
+			hasDescription = true
+			break
+		end
+	end
+	
+	-- use effect
+	if data.itemHasUseEffect then 
+		if (not useSimplified) and ((data.itemHasEquipEffect or hasDescription) or (self:GetNumLines() > 3)) then
+			self:AddLine(" ")
+		end
+		self:AddLine(data.itemUseEffect, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
+	end 
+
+	-- equip effect(s)
+	if data.itemHasEquipEffect then 
+		if (not useSimplified) and (hasDescription or (self:GetNumLines() > 3)) then
+			self:AddLine(" ")
+		end
+		for _,stat in ipairs(data.itemEquipEffects) do 
+			self:AddLine(stat, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
+		end 
+	end 
+
+	-- description
+	if (hasDescription) then
+		if (not useSimplified) and (self:GetNumLines() > 3) then
+			self:AddLine(" ")
+		end
+		for _,msg in ipairs(data.itemDescription) do 
+			--self:AddLine(msg, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
+			self:AddLine(msg, colors.quest.yellow[1], colors.quest.yellow[2], colors.quest.yellow[3], true)
+		end 
+	end
+
+	-- durability
+	if data.itemDurability then 
+		self:AddLine(string_format(DURABILITY_TEMPLATE, data.itemDurability, data.itemDurabilityMax), offwhiteR, offwhiteG, offwhiteB)
+	end 
+
+	-- sell value
+	if (data.itemSellPrice) and ((data.itemRarity == 0) or (MerchantFrame:IsShown())) then 
+		local moneyString
+		if (self.coinStringGold) and (self.coinStringSilver) and (self.coinStringCopper) then 
+
+			local gold = math_floor(data.itemSellPrice / (100 * 100))
+			if (gold > 0) then 
+				moneyString = string_format("%d%s", gold, self.coinStringGold)
+			end
+
+			local silver = math_floor((data.itemSellPrice - (gold * 100 * 100)) / 100)
+			if (silver > 0) then 
+				moneyString = (moneyString and moneyString.." " or "") .. string_format("%d%s", silver, self.coinStringSilver)
+			end
+
+			local copper = math_mod(data.itemSellPrice, 100)
+			if (copper > 0) then 
+				moneyString = (moneyString and moneyString.." " or "") .. string_format("%d%s", copper, self.coinStringCopper)
+			end 
+		else
+			moneyString = GetMoneyString(money, false)
+		end
+		if (moneyString) then
+			self:AddLine(moneyString, Colors.offwhite[1], Colors.offwhite[2], Colors.offwhite[3])
+		end
+	end
+
+end
+
 Tooltip.SetActionItem = function(self, slot)
 	if (not self.owner) then
 		self:Hide()
@@ -1179,161 +1424,7 @@ Tooltip.SetActionItem = function(self, slot)
 	local data = self:GetTooltipDataForActionItem(slot, self.data)
 	if data then 
 
-		-- Because a millionth of a second matters.
-		local colors = self.colors
-		local offwhiteR, offwhiteG, offwhiteB = colors.offwhite[1], colors.offwhite[2], colors.offwhite[3]
-
-		-- User settings
-		local colorNameAsSpell = self.colorNameAsSpellWithUse and data.itemHasUseEffect 
-		local skipItemLevel = self.hideItemLevelWithUse and data.itemHasUseEffect
-		local skipStats = self.hideStatsWithUseEffect and data.itemHasUseEffect
-		local skipBinds = self.hideBindsWithUseEffect and data.itemHasUseEffect
-		local skipUnique = self.hideUniqueWithUseEffect and data.itemHasUseEffect
-		local skipEquipAndType = self.hideEquipTypeWithUseEffect and data.itemHasUseEffect
-
-		-- Shouldn't be any bars here, but if for some reason 
-		-- the tooltip wasn't properly hidden before this, 
-		-- we make sure the bars are reset!
-		self:ClearStatusBars(true) -- suppress layout updates
-
-		-- item name and item level on top
-		if data.itemLevel and (not skipItemLevel) then 
-			self:AddDoubleLine(data.itemName, data.itemLevel, colors.quality[data.itemRarity][1], colors.quality[data.itemRarity][2], colors.quality[data.itemRarity][3], colors.normal[1], colors.normal[2], colors.normal[3], true)
-		elseif colorNameAsSpell then 
-			self:AddLine(data.itemName, colors.title[1], colors.title[2], colors.title[3], true)
-		else 
-			self:AddLine(data.itemName, colors.quality[data.itemRarity][1], colors.quality[data.itemRarity][2], colors.quality[data.itemRarity][3], true)
-		end 
-
-		-- item bind status
-		if data.itemIsBound and (not skipBinds) then 
-			self:AddLine(data.itemBind, offwhiteR, offwhiteG, offwhiteB)
-		end 
-
-		-- item unique status
-		if data.itemIsUnique and (not skipUnique) then 
-			self:AddLine(data.itemUnique, offwhiteR, offwhiteG, offwhiteB)
-		end 
-
-		-- item equip location and type
-		if (not skipEquipAndType) then 
-			if (data.itemEquipLoc and (data.itemEquipLoc ~= "")) then 
-				local itemType
-				if data.itemType then 
-					if data.itemEquipLoc ~= "INVTYPE_TRINKET" and data.itemEquipLoc ~= "INVTYPE_FINGER" and data.itemEquipLoc ~= "INVTYPE_NECK" then 
-						itemType = data.itemSubType or data.itemType
-					end 
-				end 
-				if (itemType) then
-					self:AddDoubleLine(_G[data.itemEquipLoc], itemType, offwhiteR, offwhiteG, offwhiteB, offwhiteR, offwhiteG, offwhiteB)
-				else 
-					self:AddLine(_G[data.itemEquipLoc], offwhiteR, offwhiteG, offwhiteB)
-				end 
-			
-			elseif (data.itemType or data.itemSubType) then 
-				if (data.itemClassID == LE_ITEM_CLASS_MISCELLANEOUS) then 
-					-- This includes hearthstones, flight master's whistle and similar
-
-				elseif (data.itemClassID == LE_ITEM_CLASS_CONSUMABLE) then 
-					-- Food, drink, flasks, etc
-					self:AddLine(data.itemSubType or data.itemType, offwhiteR, offwhiteG, offwhiteB)
-
-				else 
-					self:AddLine(data.itemSubType or data.itemType, offwhiteR, offwhiteG, offwhiteB)
-				end 
-			end 
-		end 
-
-		if (not skipStats) then 
-
-			-- damage and speed
-			if (data.itemDamageMin and data.itemDamageMax) then 
-				if data.itemSpeed then 
-					self:AddDoubleLine(string_format(DAMAGE_TEMPLATE, math_floor(data.itemDamageMin), math_floor(data.itemDamageMax)), string_format("%s %s", ITEM_MOD_CR_SPEED_SHORT, data.itemSpeed), colors.highlight[1], colors.highlight[2], colors.highlight[3], offwhiteR, offwhiteG, offwhiteB)
-					
-				else 
-					self:AddLine(string_format(DAMAGE_TEMPLATE, math_floor(data.itemDamageMin), math_floor(data.itemDamageMax)), colors.highlight[1], colors.highlight[2], colors.highlight[3])
-				end 
-			end 
-
-			-- damage pr second
-			if data.itemDPS then 
-				self:AddLine(string_format(DPS_TEMPLATE, string_format("%.1f", data.itemDPS+.05)), colors.highlight[1], colors.highlight[2], colors.highlight[3])
-			end 
-
-			local statR, statG, statB = colors.quest.green[1], colors.quest.green[2], colors.quest.green[3] 
-			
-			-- armor 
-			if (data.itemArmor and (data.itemArmor ~= 0)) then 
-				self:AddLine(string_format("%s %s", (data.itemArmor > 0) and ("+"..tostring(data.itemArmor)) or tostring(data.itemArmor), RESISTANCE0_NAME), offwhiteR, offwhiteG, offwhiteB)
-			end 
-			
-			-- block 
-			if data.itemBlock and (data.itemBlock ~= 0) then 
-				self:AddLine(string_format("%s %s", (data.itemBlock > 0) and ("+"..tostring(data.itemBlock)) or tostring(data.itemBlock), ITEM_MOD_BLOCK_RATING_SHORT), offwhiteR, offwhiteG, offwhiteB)
-			end 
-
-			-- parry?
-
-			-- primary stats
-			if data.primaryStatValue and (data.primaryStatValue ~= 0) then 
-				self:AddLine(string_format("%s %s", (data.primaryStatValue > 0) and ("+"..tostring(data.primaryStatValue)) or tostring(data.primaryStatValue), data.primaryStat), statR, statG, statB)
-
-			end 
-			if data.primaryStats then 
-				for key,value in pairs(data.primaryStats) do 
-					self:AddLine(string_format("%s %s", (value > 0) and ("+"..tostring(value)) or tostring(value), _G[key]), statR, statG, statB)
-				end 
-			end 
-
-			-- stamina
-			if data.itemStamina and (data.itemStamina ~= 0) then 
-				self:AddLine(string_format("%s %s", (data.itemStamina > 0) and ("+"..tostring(data.itemStamina)) or tostring(data.itemStamina), ITEM_MOD_STAMINA_SHORT), statR, statG, statB)
-
-			end 
-
-			-- secondary stats
-			if data.sorted2ndStats then 
-				for _,stat in ipairs(data.sorted2ndStats) do 
-					self:AddLine(stat, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3])
-				end 
-			end 
-
-			-- no benefit stats
-			if data.uselessStats then 
-				for key,value in pairs(data.uselessStats) do 
-					self:AddLine(string_format("%s %s", (value > 0) and ("+"..tostring(value)) or tostring(value), _G[key]), colors.quest.gray[1], colors.quest.gray[2], colors.quest.gray[3])
-				end 
-			end 
-
-		end
-
-		-- use effect
-		if data.itemHasUseEffect then 
-			self:AddLine(data.itemUseEffect, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
-		end 
-
-		-- equip effect(s)
-		if data.itemHasEquipEffect then 
-			for _,stat in ipairs(data.itemEquipEffects) do 
-				self:AddLine(stat, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
-			end 
-		end 
-
-		-- description
-		if data.itemDescription then
-			for _,msg in ipairs(data.itemDescription) do 
-				self:AddLine(msg, colors.quest.green[1], colors.quest.green[2], colors.quest.green[3], true)
-			end 
-		end
-
-		-- durability
-		if data.itemDurability then 
-			self:AddLine(string_format(DURABILITY_TEMPLATE, data.itemDurability, data.itemDurabilityMax), offwhiteR, offwhiteG, offwhiteB)
-		end 
-
-		-- sell value
-
+		SetItemInfo(self, data, true) -- simplify the display on actionbuttons.
 
 		self:Show()
 	end 
@@ -1408,6 +1499,32 @@ Tooltip.SetPetAction = function(self, slot)
 
 		self:Show()
 	end 
+end
+
+Tooltip.SetBagItem = function(self, bagID, slotID)
+	if (not self.owner) then
+		self:Hide()
+		return
+	end
+	local data = self:GetTooltipDataForContainerSlot(bagID, slotID, self.data)
+	if (data) then
+
+		SetItemInfo(self, data, false) -- don't simplify in bags, we want more info here.
+		
+		self:Show()
+
+		-- Mimic the blizz return values here.
+		return 	data.hasCooldown, 
+				data.repairCost, 
+				data.speciesID, 
+				data.level, 
+				data.breedQuality, 
+				data.maxHealth, 
+				data.power, 
+				data.speed, 
+				data.name
+
+	end
 end
 
 Tooltip.SetItem = function(self, item)
@@ -2345,6 +2462,32 @@ local SetDefaultAnchor = function(tooltip, parent)
 	end 
 end 
 
+local SetDefaultPosition = function(tooltip)
+	-- Previous statement applies.
+	if (tooltip:IsForbidden()) or (tooltip:GetAnchorType() ~= "ANCHOR_NONE") then -- (not tooltip:IsShown())
+		return 
+	end
+
+	-- Attempt to find our own defaults, or just go with normal blizzard defaults otherwise. 
+	-- Retrieve default anchor for this tooltip
+	local defaultAnchor = LibTooltip:GetDefaultCValue("defaultAnchor")
+	if defaultAnchor then 
+		local position
+		if (type(defaultAnchor) == "function") then 
+			local parent = tooltip:GetOwner()
+			if (not parent) then 
+				return
+			end
+			position = { defaultAnchor(tooltip, parent) }
+		else 
+			position = { unpack(defaultAnchor) }
+		end
+		Tooltip.Place(tooltip, unpack(position))
+	else 
+		Tooltip.Place(tooltip, "BOTTOMRIGHT", "UIParent", "BOTTOMRIGHT", -_G.CONTAINER_OFFSET_X - 13, _G.CONTAINER_OFFSET_Y)
+	end 
+end
+
 -- Set a default position for all registered tooltips. 
 -- Also used as a fallback position for Blizzard / 3rd Party addons 
 -- that rely on GameTooltip_SetDefaultAnchor to position their tooltips. 
@@ -2361,14 +2504,17 @@ LibTooltip.SetDefaultTooltipPosition = function(self, ...)
 	else 
 		LibTooltip:SetDefaultCValue("defaultAnchor", { ... })
 	end 
+	LibTooltip:ForAllTooltips("UpdatePosition")
 	LibTooltip:SetSecureHook("GameTooltip_SetDefaultAnchor", SetDefaultAnchor)
+
+	SetDefaultPosition(GameTooltip)
 end 
 
 LibTooltip.SetDefaultTooltipBackdrop = function(self, backdropTable)
 	check(backdropTable, 1, "table", "nil")
 	LibTooltip:SetDefaultCValue("backdrop", backdropTable)
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
-	LibTooltip:ForAllTooltips("UpdateBars")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
+	LibTooltip:ForAllTooltips("UpdateBarLayout")
 end 
 
 LibTooltip.SetDefaultTooltipBackdropColor = function(self, r, g, b, a)
@@ -2377,7 +2523,7 @@ LibTooltip.SetDefaultTooltipBackdropColor = function(self, r, g, b, a)
 	check(b, 3, "number")
 	check(a, 4, "number", "nil")
 	LibTooltip:SetDefaultCValue("backdropColor", { r, g, b, a })
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
 end 
 
 LibTooltip.SetDefaultTooltipBackdropBorderColor = function(self, r, g, b, a)
@@ -2386,7 +2532,7 @@ LibTooltip.SetDefaultTooltipBackdropBorderColor = function(self, r, g, b, a)
 	check(b, 3, "number")
 	check(a, 4, "number", "nil")
 	LibTooltip:SetDefaultCValue("backdropBorderColor", { r, g, b, a })
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
 end 
 
 LibTooltip.SetDefaultTooltipBackdropOffset = function(self, left, right, top, bottom)
@@ -2395,22 +2541,22 @@ LibTooltip.SetDefaultTooltipBackdropOffset = function(self, left, right, top, bo
 	check(top, 3, "number")
 	check(bottom, 4, "number")
 	LibTooltip:SetDefaultCValue("backdropOffsets", { left, right, top, bottom })
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
 end 
 
 LibTooltip.SetDefaultTooltipStatusBarInset = function(self, left, right)
 	check(left, 1, "number")
 	check(right, 2, "number")
 	LibTooltip:SetDefaultCValue("barInsets", { left, right })
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
-	LibTooltip:ForAllTooltips("UpdateBars")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
+	LibTooltip:ForAllTooltips("UpdateBarLayout")
 end 
 
 LibTooltip.SetDefaultTooltipStatusBarOffset = function(self, barOffset)
 	check(barOffset, 1, "number")
 	LibTooltip:SetDefaultCValue("barOffset", barOffset)
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
-	LibTooltip:ForAllTooltips("UpdateBars")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
+	LibTooltip:ForAllTooltips("UpdateBarLayout")
 end 
 
 LibTooltip.SetDefaultTooltipStatusBarHeight = function(self, barHeight, barType)
@@ -2421,15 +2567,15 @@ LibTooltip.SetDefaultTooltipStatusBarHeight = function(self, barHeight, barType)
 	else 
 		LibTooltip:SetDefaultCValue("barHeight", barHeight)
 	end 
-	LibTooltip:ForAllTooltips("UpdateBars")
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
+	LibTooltip:ForAllTooltips("UpdateBarLayout")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
 end 
 
 LibTooltip.SetDefaultTooltipStatusBarSpacing = function(self, barSpacing)
 	check(barSpacing, 1, "number")
 	LibTooltip:SetDefaultCValue("barSpacing", barSpacing)
-	LibTooltip:ForAllTooltips("UpdateBackdrop")
-	LibTooltip:ForAllTooltips("UpdateBars")
+	LibTooltip:ForAllTooltips("UpdateBackdropLayout")
+	LibTooltip:ForAllTooltips("UpdateBarLayout")
 end 
 
 LibTooltip.SetDefaultTooltipColorTable = function(self, colorTable)
