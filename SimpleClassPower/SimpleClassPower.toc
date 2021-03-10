@@ -1,4 +1,4 @@
-## Interface: 90002
+## Interface: 90005
 ## Name: SimpleClassPower
 ## Title: |c00000001|r|cffa335eeS|r|cff912fd4i|r|cff7f29bam|r|cff6f24a1p|r|cff5d1e88l|r|cff4c196ee|r|cffffffffC|r|cffeeeeeel|r|cffdddddda|r|cffccccccs|r|cffbbbbbbs|r|cffffffffP|r|cffeeeeeeo|r|cffddddddw|r|cffcccccce|r|cffbbbbbbr|r
 ## Author: Lars Norberg
