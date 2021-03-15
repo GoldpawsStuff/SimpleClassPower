@@ -1,4 +1,4 @@
-local LibBagButton = Wheel:Set("LibBagButton", 44)
+local LibBagButton = Wheel:Set("LibBagButton", 49)
 if (not LibBagButton) then	
 	return
 end
@@ -472,6 +472,8 @@ Button.SetHeight = function(self, ...)
 end
 
 -- ItemButton ID Handling
+-- Don't use these for blizz buttons, 
+-- we should just let them keep what they have. 
 ----------------------------------------------------
 -- Set the bagID of the button.
 -- Only accept changes within the same bagType range,
@@ -673,6 +675,7 @@ Button.Update = function(self)
 			local _, _, locked = GetContainerItemInfo(self.bagID, self.slotID)
 			Item.isLocked = locked
 
+			self.hasItem = Item.hasItem
 			self.itemID = Item.itemID
 			self.itemString = Item.itemString
 			self.itemName = Item.itemName
@@ -696,6 +699,7 @@ Button.Update = function(self)
 			self.itemBind = Item.itemBind
 			self.expacID = Item.expacID
 			self.itemSetID = Item.itemSetID
+			self.isReadable = Item.isReadable
 			self.isCraftingReagent = Item.isCraftingReagent
 			self.isUsable = Item.isUsable
 			self.isQuestItem = Item.isQuestItem
@@ -714,6 +718,7 @@ Button.Update = function(self)
 		clear = true
 	end
 	if (clear) then
+		self.hasItem = nil
 		self.itemID = nil
 		self.itemString = nil
 		self.itemName = nil
@@ -735,6 +740,7 @@ Button.Update = function(self)
 		self.expacID = nil
 		self.itemSetID = nil
 		self.isCraftingReagent = nil
+		self.isReadable = nil
 		self.isUsable = nil
 		self.isQuestItem = nil
 		self.isQuestActive = nil
@@ -745,6 +751,10 @@ Button.Update = function(self)
 		self.isBattlePet = nil
 		self.noValue = nil
 	end
+
+	local slot = ButtonSlots[self]
+	slot.hasItem = self.hasItem
+	slot.readable = self.isReadable
 
 	-- Update layers
 	self:UpdateIcon()
@@ -839,6 +849,12 @@ Button.OnLeave = function(self)
 	if (not SpellIsTargeting()) then
 		ResetCursor()		
 	end
+end
+
+Button.OnPreClick = function(self)
+end
+
+Button.OnPostClick = function(self)
 end
 
 -- The button's actual event handler, 
@@ -1013,12 +1029,12 @@ Container.Update = function(self)
 	end
 end
 
-Container.SpawnItemButton = function(self, bagType)
+Container.SpawnItemButton = function(self, ...)
 	if (not self.buttons) then
 		self.buttons = {}
 	end
 
-	local button = LibBagButton:SpawnItemButton(bagType)
+	local button = LibBagButton:SpawnItemButton(...)
 	button:SetParent(self)
 	button._owner = self
 
@@ -1357,13 +1373,21 @@ end
 -- and our library equivalents.
 -- Note: We should check for library version if we change this!
 local methodByGlobal = {
-	["ToggleAllBags"] = "ToggleBags",
 	["ToggleBackpack"] = "ToggleBags",
-	["ToggleBag"] = "ToggleBags",
-	["OpenAllBags"] = "ShowBags",
 	["OpenBackpack"] = "ShowBags",
+	["ToggleBag"] = "ToggleBags",
 	["OpenBag"] = "ShowBags",
-	["CloseAllBags"] = "HideBags" -- only replace the full hide function, not singular bags.
+	["OpenAllBags"] = "ShowBags",
+	["ToggleAllBags"] = "ToggleBags"
+}
+
+-- Can't replace these, that'll backtrack to ToggleAllBags, 
+-- and by association taint the click function of the item buttons in the bag, 
+-- making the game block /use attempts from items appearing in your bags during combat. 
+-- Fun, right?
+local hooksByGlobal = {
+	["CloseBackpack"] = "HideBags",
+	["CloseAllBags"] = "HideBags"
 }
 
 -- Method to hook the blizzard bag toggling functions.
@@ -1395,6 +1419,20 @@ LibBagButton.HookBlizzardBagFunctions = function(self)
 			_G[globalName] = func
 		end
 	end
+
+	for globalName,method in pairs(hooksByGlobal) do
+		local globalFunc = _G[globalName]
+		if (globalFunc) then
+			local method = method
+			LibBagButton:SetSecureHook(globalName, function(...) 
+				if (LibBagButton.IsBlizzardHooked) then
+					return LibBagButton[method](LibBagButton, ...)
+				end
+			end, "GP_LibBagButton_Hook"..globalName)
+		end
+	end
+
+	LibBagButton.IsBlizzardHooked = true
 end
 
 -- Method to restore blizzard bag toggling functions.
@@ -1410,6 +1448,8 @@ LibBagButton.UnhookBlizzardBagFunctions = function(self)
 	for globalName,func in pairs(BlizzardMethods) do
 		_G[globalName] = func
 	end
+
+	LibBagButton.IsBlizzardHooked = nil
 end
 
 LibBagButton.OnEvent = function(self, event, ...)
@@ -1651,6 +1691,21 @@ end
 local hidden = CreateFrame("Frame")
 hidden:Hide()
 
+LibBagButton.GetBlizzardSlotButton = function(self, bagID, slotID)
+	if (bagID) and (slotID) then
+		local button = _G[string_format("ContainerFrame%dItem%d", bagID, slotID)]
+		if (button) then
+			button:ClearAllPoints()
+			return self:PrepareBlizzardSlotButton(button)
+		end
+	end
+end
+
+LibBagButton.PrepareBlizzardSlotButton = function(self, button)
+
+	return button
+end
+
 -- @input bagType <integer,string> bagID or bagType
 -- @return <frame> the button
 LibBagButton.SpawnItemButton = function(self, ...)
@@ -1684,7 +1739,6 @@ LibBagButton.SpawnItemButton = function(self, ...)
 
 	-- Our virtual object. We don't want the front-end to directly
 	-- interact with any of the actual objects created below.
-	--button = setmetatable(self:CreateFrame(BUTTON_TYPE), Button_MT)
 	button = setmetatable(self:CreateFrame("Frame"), Button_MT)
 	button:EnableMouse(false)
 	button.bagType = bagType
@@ -1696,38 +1750,52 @@ LibBagButton.SpawnItemButton = function(self, ...)
 	-- except that it totally isn't that at all. 
 	-- We just need a parent for the slot with and ID for the template to work.
 	parent = button:CreateFrame("Frame")
-	--parent:SetAllPoints()
 	parent:EnableMouse(false)
 	parent:SetID(bagID or 100)
 
 	-- Need to clear away blizzard layers from this one, 
 	-- as they interfere with anything we do.
+	--slot = self:GetBlizzardSlotButton(bagID, slotID) or parent:CreateFrame(BUTTON_TYPE, nil, ButtonTemplates[bagType])
+	--slot:SetParent(parent) -- in case it's a blizz button. need to grab it.
 	slot = parent:CreateFrame(BUTTON_TYPE, nil, ButtonTemplates[bagType])
 	slot:SetAllPoints(button) -- bypass the parent/fakebag object
 	slot:SetPoint("CENTER", button, "CENTER", 0, 0)
 	slot:EnableMouse(true)
 
 	-- BlizzKill
+	-- We're oversimplifying this 
+	-- by just disabling all the draw layers.
 	slot.UpdateTooltip = nil
 	slot:DisableDrawLayer("BACKDROP")
 	slot:DisableDrawLayer("BORDER")
 	slot:DisableDrawLayer("ARTWORK")
 	slot:DisableDrawLayer("OVERLAY")
-	slot:GetNormalTexture():SetParent(hidden)
-	slot:GetPushedTexture():SetParent(hidden)
-	slot:GetHighlightTexture():SetParent(hidden)
 
-	slot:SetID(slotID or 0)
+	-- Sometimes on the first login on the initial startup of the game, 
+	-- these aren't set so hiding the textures will cause a nil bug.
+	slot:SetNormalTexture(nil)
+	slot:SetPushedTexture(nil)
+	slot:SetHighlightTexture(nil)
+
+	slot:SetID(slotID or 0) -- this is already set on blizz buttons, but doesn't hurt to repeat.
 	slot:Show() -- do this before we add the scripthandlers below!
 
 	-- Set Scripts
 	-- Let these be proxies
+	slot:SetScript("OnEvent", nil)
 	slot:SetScript("OnEnter", function(slot) button:OnEnter() end)
 	slot:SetScript("OnLeave", function(slot) button:OnLeave() end)
+	slot:SetScript("PreClick", function(slot) button:OnPreClick() end)
+	slot:HookScript("OnClick", function(slot) button:OnPostClick() end)
+
+	-- We'll just let the button object handle this instead, 
+	-- as the visibilities should be linked anyway.
 	--slot:SetScript("OnHide", function(slot) button:OnHide() end)
 	--slot:SetScript("OnShow", function(slot) button:OnShow() end)
-	--slot:SetScript("OnEvent", function(slot) button:OnEvent() end)
+	slot:SetScript("OnHide", nil)
+	slot:SetScript("OnShow", nil)
 
+	-- Our virtual button handles visibility scripts and events.
 	button:SetScript("OnHide", button.OnHide)
 	button:SetScript("OnShow", button.OnShow)
 	button:SetScript("OnEvent", button.OnEvent)
