@@ -23,31 +23,6 @@ local GetMedia = Private.GetMedia
 local Colors = Private.Colors
 
 ---------------------------------------------------
--- Additional Mover Methods
----------------------------------------------------
-local Mover = {}
-
-Mover.OnEnter = function(self)
-	local colors = Colors
-	local tooltip = self:GetTooltip()
-	local bottom = self:GetBottom() 
-	local top = Core:GetFrame("UICenter"):GetHeight() - self:GetTop()
-	local point = ((bottom < top) and "BOTTOM" or "TOP")
-	local rPoint = ((bottom < top) and "TOP" or "BOTTOM")
-	local offset = (bottom < top) and 20 or -20
-	
-	tooltip:SetOwner(self, "ANCHOR_NONE")
-	tooltip:Place(point, self, rPoint, 0, offset)
-	tooltip:SetMinimumWidth(280)
-	tooltip:AddLine(ADDON, colors.title[1], colors.title[2], colors.title[3])
-	--tooltip:AddLine(L["<Left-Click> to raise"], colors.green[1], colors.green[2], colors.green[3])
-	--tooltip:AddLine(L["<Left-Click> to lower"], colors.green[1], colors.green[2], colors.green[3])
-	tooltip:AddLine(L["<Shift Left Click> to reset position"], colors.green[1], colors.green[2], colors.green[3])
-	tooltip:AddLine(L["<Shift Right Click> to reset scale"], colors.green[1], colors.green[2], colors.green[3])
-	tooltip:Show()
-end
-
----------------------------------------------------
 -- Class Resource Styling
 ---------------------------------------------------
 local Style = function(self, unit, id, layout, ...)
@@ -256,9 +231,15 @@ Core.OnInit = function(self)
 	mover:SetMinMaxScale(.5, 1.5, .05)
 	mover:SetDefaultPosition(unpack(self.layout.Place))
 	mover:SetScale(self.db.savedScale or 1) -- use the mover to set the frame scale, or positions will be wonky
-	for name,method in pairs(Mover) do 
-		mover[name] = method
-	end 
+	mover.OnEnter = function(self)
+		local tooltip = self:GetTooltip()
+		tooltip:SetMinimumWidth(280)
+		tooltip:SetSmartVerticalAnchor(self, 20)
+		tooltip:AddLine(ADDON, Colors.title[1], Colors.title[2], Colors.title[3])
+		tooltip:AddLine(L["<Shift Left Click> to reset position"], Colors.green[1], Colors.green[2], Colors.green[3])
+		tooltip:AddLine(L["<Shift Right Click> to reset scale"], Colors.green[1], Colors.green[2], Colors.green[3])
+		tooltip:Show()
+	end
 	self.mover = mover 
 
 	-- Register a chat command to toggle the config window
