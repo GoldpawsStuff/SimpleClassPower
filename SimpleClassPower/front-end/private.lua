@@ -1,22 +1,11 @@
 local ADDON, Private = ...
 
-local LibClientBuild = Wheel("LibClientBuild")
-assert(LibClientBuild, ADDON.." requires LibClientBuild to be loaded.")
-
 local LibColorTool = Wheel("LibColorTool")
 assert(LibColorTool, ADDON.." requires LibColorTool to be loaded.")
 
 local LibFontTool = Wheel("LibFontTool")
 assert(LibFontTool, ADDON.." requires LibFontTool to be loaded.")
 
--- Lua API
-local _G = _G
-local math_floor = math.floor
-local pairs = pairs
-local select = select
-local unpack = unpack
-
--- Private API
 local Colors = LibColorTool:GetColorTable()
 local GetFont = function(...) return LibFontTool:GetFont(...) end
 local GetMedia = function(name, type) return ([[Interface\AddOns\%s\media\%s.%s]]):format(ADDON, name, type or "tga") end
