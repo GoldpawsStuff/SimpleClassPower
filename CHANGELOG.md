@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.32-Release] 2021-03-25
+### Changed
+- Back-end updates and fixes. 
+
 ## [2.1.31-Release] 2021-03-23
 ### Changed
 - Back-end updates and fixes. 
