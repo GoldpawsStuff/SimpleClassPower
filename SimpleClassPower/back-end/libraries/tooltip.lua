@@ -1,4 +1,4 @@
-local LibTooltip = Wheel:Set("LibTooltip", 112)
+local LibTooltip = Wheel:Set("LibTooltip", 115)
 if (not LibTooltip) then
 	return
 end
@@ -209,7 +209,9 @@ local alignLine = function(tooltip, lineIndex)
 	end 
 
 	-- If this is a single line, anchor it to the right side too, to allow wrapping.
-	if (not right:IsShown()) then 
+	if (right:IsShown()) then 
+		left:SetPoint("RIGHT", right, "LEFT", -RIGHT_PADDING, 0)
+	else
 		left:SetPoint("RIGHT", tooltip, "RIGHT", -TEXT_INSET, 0)
 	end 
 end 
@@ -418,13 +420,28 @@ Tooltip.UpdateLayout = function(self)
 		-- TODO: Add a system to make sure even overflow is controlled, 
 		-- by forcefully line-breaking the offending sides.
 		local right = self.lines.right[lineIndex]
-		if right:IsShown() then 
-			lineWidth = left:GetStringWidth() + RIGHT_PADDING + right:GetStringWidth()
-			if (lineWidth > (overflowWidth or self.maximumWidth)) then 
-				overflowWidth = lineWidth
-			end 
+		if (right:IsShown()) then 
+			local rightWidth = RIGHT_PADDING + right:GetStringWidth()
+			local leftWidth = left:GetStringWidth()
+			local freeSpace = self.maximumWidth - rightWidth
+			if (left._wordWrap) then
+				lineWidth = leftWidth + rightWidth
+				if (lineWidth > self.maximumWidth) and (self.maximumWidth > rightWidth + self.minimumWidth) then 
+					lineWidth = self.maximumWidth
+				end 
+			else
+				lineWidth = leftWidth + rightWidth
+				if (lineWidth > (overflowWidth or self.maximumWidth)) then 
+					overflowWidth = lineWidth
+				end 
+			end
 		else 
 			lineWidth = left:GetStringWidth()
+			if (not left._wordWrap) then
+				if (lineWidth > (overflowWidth or self.maximumWidth)) then 
+					overflowWidth = lineWidth
+				end 
+			end
 		end 
 
 		-- Increase the width if this line was larger
@@ -2024,12 +2041,14 @@ Tooltip.AddLine = function(self, msg, r, g, b, wrap)
 	left:SetText(msg)
 	left:SetTextColor(r, g, b)
 	left:SetWordWrap(wrap or false) -- just wrap by default?
+	left._wordWrap = wrap or false
 	left:Show()
 
 	local right = self.lines.right[self.numLines]
 	right:Hide()
 	right:SetText("")
 	right:SetWordWrap(false)
+	right._wordWrap = false
 
 	-- Align the line
 	alignLine(self, self.numLines)
@@ -2058,12 +2077,14 @@ Tooltip.AddDoubleLine = function(self, leftMsg, rightMsg, r, g, b, r2, g2, b2, l
 	left:SetText(leftMsg)
 	left:SetTextColor(r, g, b)
 	left:SetWordWrap(leftWrap or false)
+	left._wordWrap = leftWrap or false
 	left:Show()
 
 	local right = self.lines.right[self.numLines]
 	right:SetText(rightMsg)
 	right:SetTextColor(r2, g2, b2)
 	right:SetWordWrap(rightWrap or false)
+	right._wordWrap = rightWrap or false
 	right:Show()
 end
 
@@ -2581,7 +2602,7 @@ LibTooltip.CreateTooltip = function(self, name)
 	tooltip.numLines = 0 -- current number of visible lines
 	tooltip.numBars = 0 -- current number of visible bars
 	tooltip.numTextures = 0 -- current number of visible textures
-	tooltip.minimumWidth = 160 -- current minimum display width
+	tooltip.minimumWidth = 120 -- current minimum display width
 	tooltip.maximumWidth = 360 -- current maximum display width
 	tooltip.colors = Colors -- assign our color table, can be replaced by modules to override colors. 
 	tooltip.lines = { left = {}, right = {} } -- pool of all text lines
