@@ -1,4 +1,4 @@
-local LibBlizzard = Wheel:Set("LibBlizzard", 92)
+local LibBlizzard = Wheel:Set("LibBlizzard", 95)
 if (not LibBlizzard) then 
 	return
 end
@@ -349,7 +349,8 @@ or IsRetail and function(self)
 		SpellBookTooltip:SetScript("OnUpdate", nil)
 	end
 
-	-- let spell book buttons work without tainting by replacing this function
+	-- Let spell book button tooltips work without tainting,
+	-- by replacing the script handlers with safer methods.
 	for i = 1, SPELLS_PER_PAGE do
 		local button = _G["SpellButton"..i]
 		button:SetScript("OnEnter", SpellButtonOnEnter)
@@ -377,6 +378,10 @@ or IsRetail and function(self)
 		local frame = _G[object]
 		if (frame) then
 			frame:UnregisterAllEvents()
+		else
+			if (self.AddDebugMessageFormatted) then
+				self:AddDebugMessageFormatted(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+			end
 		end
 	end
 	for i,object in ipairs({
@@ -398,17 +403,21 @@ or IsRetail and function(self)
 		if (frame) then
 			frame:SetParent(UIHider)
 			noopthis(frame)
+		else			
+			if (self.AddDebugMessageFormatted) then
+				self:AddDebugMessageFormatted(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
+			end
 		end
 	end
 	
-	-- MainMenuBar:ClearAllPoints taint during combat
+	-- MainMenuBar:ClearAllPoints taint during combat.
 	MainMenuBar.SetPositionForStatusBars = noop
 
-	-- Spellbook open in combat taint, only happens sometimes
+	-- Spellbook open in combat taint, only happens sometimes.
 	MultiActionBar_HideAllGrids = noop
 	MultiActionBar_ShowAllGrids = noop
 
-	-- Try to shutdown the container movement and taints
+	-- Try to shutdown the container movement and taints.
 	UIPARENT_MANAGED_FRAME_POSITIONS.ExtraAbilityContainer = nil
 	ExtraAbilityContainer.SetSize = noop
 	
@@ -416,19 +425,19 @@ or IsRetail and function(self)
 	MainMenuBarPerformanceBar:SetAlpha(0)
 	MainMenuBarPerformanceBar:SetScale(.00001)
 
-	-- shut down some events for things we dont use
+	-- Clear out crap we don't need.
 	noopthis(MainMenuBarArtFrame)
 	noopthis(MainMenuBarArtFrameBackground)
 	MainMenuBarArtFrame:UnregisterAllEvents()
 	StatusTrackingBarManager:UnregisterAllEvents()
 	ActionBarButtonEventsFrame:UnregisterAllEvents()
-	ActionBarButtonEventsFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED") -- these are needed to let the ExtraActionButton show
-	ActionBarButtonEventsFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN") -- needed for ExtraActionBar cooldown
+	ActionBarButtonEventsFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED") -- This is needed for ExtraActionButton to show.
+	ActionBarButtonEventsFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN") -- This is needed for ExtraActionBar cooldown.
 	ActionBarActionEventsFrame:UnregisterAllEvents()
 	ActionBarController:UnregisterAllEvents()
-	ActionBarController:RegisterEvent("UPDATE_EXTRA_ACTIONBAR") -- this is needed to let the ExtraActionBar show
+	ActionBarController:RegisterEvent("UPDATE_EXTRA_ACTIONBAR") -- This is needed for ExtraActionBar to show.
 
-	-- lets only keep ExtraActionButtons in here
+	-- Lets only keep ExtraActionButtons in here.
 	local ButtonEventsRegisterFrame = function(self, added)
 		local frames = ActionBarButtonEventsFrame.frames
 		for index = #frames,1,-1 do
@@ -458,135 +467,6 @@ or IsRetail and function(self)
 			PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 		end)
 	end
-end
-
--- Old methods. Not using them.
-or (false) and function(self)
-
-
-	-- Continue our regular disabling
-	---------------------------------------------------------------------
-	for _,object in pairs({
-		"CollectionsMicroButtonAlert",
-		"EJMicroButtonAlert",
-		"LFDMicroButtonAlert",
-		"MainMenuBarVehicleLeaveButton",
-		"OverrideActionBar",
-		"PetActionBarFrame",
-		"StanceBarFrame",
-		"TalentMicroButtonAlert",
-		"TutorialFrameAlertButton"
-	}) do 
-		if (_G[object]) then 
-			_G[object]:UnregisterAllEvents()
-		else 
-			if (self.AddDebugMessageFormatted) then
-				self:AddDebugMessageFormatted(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
-			end
-		end
-	end 
-	for _,object in pairs({
-		"CollectionsMicroButtonAlert",
-		"EJMicroButtonAlert",
-		"FramerateLabel",
-		"FramerateText",
-		"LFDMicroButtonAlert",
-		"MainMenuBarArtFrame",
-		"MainMenuBarVehicleLeaveButton",
-		"MicroButtonAndBagsBar",
-		"MultiBarBottomLeft",
-		"MultiBarBottomRight",
-		"MultiBarLeft",
-		"MultiBarRight",
-		"OverrideActionBar",
-		"PetActionBarFrame",
-		"PossessBarFrame",
-		"StanceBarFrame",
-		"StreamingIcon",
-		"TalentMicroButtonAlert"
-	}) do 
-		if (_G[object]) then 
-			_G[object]:SetParent(UIHider)
-		else 
-			if (self.AddDebugMessageFormatted) then
-				self:AddDebugMessageFormatted(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
-			end
-		end
-	end 
-	for _,object in pairs({
-		"CollectionsMicroButtonAlert",
-		"EJMicroButtonAlert",
-		"LFDMicroButtonAlert",
-		"MainMenuBarArtFrame",
-		"MicroButtonAndBagsBar",
-		"OverrideActionBar",
-		"PetActionBarFrame",
-		"PossessBarFrame",
-		"StanceBarFrame",
-		"StatusTrackingBarManager",
-		"TutorialFrameAlertButton"
-	}) do 
-		if (_G[object]) then 
-			_G[object]:Hide()
-		else 
-			if (self.AddDebugMessageFormatted) then
-				self:AddDebugMessageFormatted(string_format("LibBlizzard: The object '%s' wasn't found, tell Goldpaw!", object))
-			end
-		end
-	end 
-	for _,object in pairs({
-		"ActionButton", 
-		"MultiBarBottomLeftButton", 
-		"MultiBarBottomRightButton", 
-		"MultiBarRightButton",
-		"MultiBarLeftButton"
-	}) do 
-		for i = 1,NUM_ACTIONBAR_BUTTONS do
-			local button = _G[object..i]
-			button:Hide()
-			button:UnregisterAllEvents()
-			button:SetAttribute("statehidden", true)
-		end
-	end 
-	for i = 1,6 do
-		local button = _G["OverrideActionBarButton"..i]
-		button:UnregisterAllEvents()
-		button:SetAttribute("statehidden", true)
-
-		-- Just in case it's still there, covering stuff. 
-		-- This has happened in some rare cases. Hiding won't work. 
-		button:EnableMouse(false) 
-	end
-	if PlayerTalentFrame then
-		PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
-	elseif TalentFrame_LoadUI then
-		hooksecurefunc("TalentFrame_LoadUI", function() PlayerTalentFrame:UnregisterEvent("ACTIVE_TALENT_GROUP_CHANGED") end)
-	end
-
-	MainMenuBar:EnableMouse(false)
-	MainMenuBar:SetAlpha(0)
-	MainMenuBar:UnregisterEvent("DISPLAY_SIZE_CHANGED")
-	MainMenuBar:UnregisterEvent("UI_SCALE_CHANGED")
-	MainMenuBar.slideOut:GetAnimations():SetOffset(0,0)
-
-	-- If I'm not hiding this, it will become visible (though transparent)
-	-- and cover our own custom vehicle/possess action bar. 
-	OverrideActionBar:EnableMouse(false)
-	OverrideActionBar:SetAlpha(0)
-	OverrideActionBar.slideOut:GetAnimations():SetOffset(0,0)
-
-	-- Gets rid of the loot anims
-	MainMenuBarBackpackButton:UnregisterEvent("ITEM_PUSH") 
-	for slot = 0,3 do
-		_G["CharacterBag"..slot.."Slot"]:UnregisterEvent("ITEM_PUSH") 
-	end
-
-	UIPARENT_MANAGED_FRAME_POSITIONS["MainMenuBar"] = nil
-	UIPARENT_MANAGED_FRAME_POSITIONS["StanceBarFrame"] = nil
-	UIPARENT_MANAGED_FRAME_POSITIONS["PossessBarFrame"] = nil
-	UIPARENT_MANAGED_FRAME_POSITIONS["PETACTIONBAR_YPOS"] = nil
-	UIPARENT_MANAGED_FRAME_POSITIONS["MultiCastActionBarFrame"] = nil
-	UIPARENT_MANAGED_FRAME_POSITIONS["MULTICASTACTIONBAR_YPOS"] = nil
 end
 
 UIWidgetsDisable["Alerts"] = function(self)
@@ -2068,6 +1948,7 @@ or IsRetail and function(self, ...)
 			self.cursor:SetFormattedText("%s:|r   |cfff0f0f0%s|r", L_MOUSE, L_NA)
 		end 
 
+		self.elapsed = 0
 	end)
 
 	-- Be gone, pest!
