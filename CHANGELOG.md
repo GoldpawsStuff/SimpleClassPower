@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.34-Release] 2021-04-15
+### Added
+- Added WoW Classic download!
+
+### Changed
+- Updated the back-end, as per usual.
+
 ## [2.1.33-Release] 2021-04-05
 - Spring cleaning.
 
