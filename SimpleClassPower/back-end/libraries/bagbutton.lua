@@ -1,4 +1,4 @@
-local LibBagButton = Wheel:Set("LibBagButton", 51)
+local LibBagButton = Wheel:Set("LibBagButton", 53)
 if (not LibBagButton) then	
 	return
 end
@@ -1700,7 +1700,7 @@ hidden:Hide()
 
 LibBagButton.GetBlizzardSlotButton = function(self, bagID, slotID)
 	if (bagID) and (slotID) then
-		local button = _G[string_format("ContainerFrame%dItem%d", bagID, slotID)]
+		local button = _G[string_format("ContainerFrame%dItem%d", bagID + 1, slotID)]
 		if (button) then
 			button:ClearAllPoints()
 			return self:PrepareBlizzardSlotButton(button)
@@ -1762,9 +1762,9 @@ LibBagButton.SpawnItemButton = function(self, ...)
 
 	-- Need to clear away blizzard layers from this one, 
 	-- as they interfere with anything we do.
-	--slot = self:GetBlizzardSlotButton(bagID, slotID) or parent:CreateFrame(BUTTON_TYPE, nil, ButtonTemplates[bagType])
-	--slot:SetParent(parent) -- in case it's a blizz button. need to grab it.
-	slot = parent:CreateFrame(BUTTON_TYPE, nil, ButtonTemplates[bagType])
+	slot = self:GetBlizzardSlotButton(bagID, slotID) or parent:CreateFrame(BUTTON_TYPE, nil, ButtonTemplates[bagType])
+	slot:SetParent(parent) -- in case it's a blizz button. need to grab it.
+	--slot = parent:CreateFrame(BUTTON_TYPE, nil, ButtonTemplates[bagType])
 	slot:SetAllPoints(button) -- bypass the parent/fakebag object
 	slot:SetPoint("CENTER", button, "CENTER", 0, 0)
 	slot:EnableMouse(true)
