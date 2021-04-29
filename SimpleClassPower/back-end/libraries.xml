@@ -60,7 +60,6 @@
 
 <!-- advanced media widget libs, require tooltip lib -->
 <Script file='libraries\actionbutton.lua'/>
-<Script file='libraries\bagbutton.lua'/>
 <Script file='libraries\nameplates.lua'/>
 
 <!-- Disabling and styling of Blizzard widgets and menu options -->
