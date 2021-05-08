@@ -1,4 +1,4 @@
-local LibTooltipScanner = Wheel:Set("LibTooltipScanner", 85)
+local LibTooltipScanner = Wheel:Set("LibTooltipScanner", 88)
 if (not LibTooltipScanner) then	
 	return
 end
@@ -69,6 +69,7 @@ local DoesSpellExist = C_Spell.DoesSpellExist
 
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
+local IsTBC = LibClientBuild:IsTBC()
 local IsRetail = LibClientBuild:IsRetail()
 
 LibTooltipScanner.embeds = LibTooltipScanner.embeds or {}
@@ -101,6 +102,18 @@ local pvpRanks = {
 	[14] = { 	PVP_RANK_18_0, 	PVP_RANK_18_1, 	136779 },
 	[15] = { 	PVP_RANK_19_0, 	PVP_RANK_19_1, 	136780 },
 }
+local notSpecified = setmetatable({
+	["frFR"] = "Non spécifié",
+	["deDE"] = "Nicht spezifiziert",
+	["koKR"] = "기타",
+	["ruRU"] = "Не указано",
+	["zhCN"] = "未指定",
+	["zhTW"] = "不明",
+	["esES"] = "No especificado",
+	["esMX"] = "Sin especificar",
+	["ptBR"] = "Não especificado",
+	["itIT"] = "Non Specificato"
+}, { __index = function(t,k) return "Not specified" end })[(GetLocale())] 
 
 -- Force creation of money lines.
 --[[
@@ -1862,6 +1875,9 @@ LibTooltipScanner.GetTooltipDataForUnit = function(self, unit, tbl)
 			tbl.classification = classification
 			tbl.creatureFamily = UnitCreatureFamily(unit)
 			tbl.creatureType = UnitCreatureType(unit)
+			if (tbl.creatureType == notSpecified) then
+				tbl.creatureType = nil
+			end
 			tbl.isBoss = classification == "worldboss"
 
 			-- Flags to track what has been found, 

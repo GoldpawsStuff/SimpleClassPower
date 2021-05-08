@@ -30,7 +30,6 @@ local UnitIsFriend = UnitIsFriend
 local UnitIsUnit = UnitIsUnit
 
 -- Constants for client version
-local IsClassic = LibClientBuild:IsClassic()
 local IsRetail = LibClientBuild:IsRetail()
 
 -- Blizzard Textures
@@ -519,10 +518,11 @@ local CacheBuffs = function(element)
 	local name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3
 
 	local cache = element.cache or get()
+	local unit = element._owner.unit or element.unit
 
 	for i = 1, BUFF_MAX_DISPLAY do 
 
-		name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = LibAura:GetUnitBuff(element.unit, i, element.filter)
+		name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = LibAura:GetUnitBuff(unit, i, element.filter)
 
 		if (not name) then
 			break
@@ -531,7 +531,7 @@ local CacheBuffs = function(element)
 		local entry = get()
 		entry.isBuff = true
 		entry.id = i
-		entry.unit = element.unit
+		entry.unit = unit
 		entry.filter = element.filter
 		entry.isOwnedByPlayer = unitCaster and (unitCaster == "player" or unitCaster == "pet")
 		entry.name = name
@@ -565,10 +565,11 @@ local CacheDebuffs = function(element)
 	local name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3
 
 	local cache = element.cache or get()
+	local unit = element._owner.unit or element.unit
 
 	for i = 1, DEBUFF_MAX_DISPLAY do 
 
-		name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = LibAura:GetUnitDebuff(element.unit, i, element.filter)
+		name, icon, count, debuffType, duration, expirationTime, unitCaster, isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff, isCastByPlayer, nameplateShowAll, timeMod, value1, value2, value3 = LibAura:GetUnitDebuff(unit, i, element.filter)
 
 		if (not name) then
 			break
@@ -577,7 +578,7 @@ local CacheDebuffs = function(element)
 		local entry = get()
 		entry.isBuff = false
 		entry.id = i
-		entry.unit = element.unit
+		entry.unit = unit
 		entry.filter = element.filter
 		entry.isOwnedByPlayer = unitCaster and (unitCaster == "player" or unitCaster == "pet")
 		entry.name = name
@@ -784,6 +785,8 @@ local Update = function(self, event, unit, ...)
 	local Debuffs = self.Debuffs
 
 	if (Auras) then 
+		Auras.unit = unit
+
 		if (Auras.PreUpdate) then
 			Auras:PreUpdate(unit)
 		end
@@ -855,6 +858,8 @@ local Update = function(self, event, unit, ...)
 	end 
 
 	if (Buffs) then
+		Buffs.unit = unit
+
 		if (Buffs.PreUpdate) then
 			Buffs:PreUpdate(unit)
 		end
@@ -924,6 +929,8 @@ local Update = function(self, event, unit, ...)
 	end 
 
 	if (Debuffs) then 
+		Debuffs.unit = unit
+
 		if (Debuffs.PreUpdate) then
 			Debuffs:PreUpdate(unit)
 		end
@@ -1124,5 +1131,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Auras", Enable, Disable, Proxy, 71)
+	Lib:RegisterElement("Auras", Enable, Disable, Proxy, 74)
 end 
