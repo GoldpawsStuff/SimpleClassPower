@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.37-Release] 2021-05-17
+- Extra push needed because the bigwigs packager changed its API from using "bc" to calling it "bcc". 
+
 ## [2.1.36-Release] 2021-05-08
 - Start BC compatibility.
 
