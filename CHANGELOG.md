@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) 
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.38-Release] 2021-05-18
+### Added
+- Added ruRU localization.
+
 ## [2.1.37-Release] 2021-05-17
 - Extra push needed because the bigwigs packager changed its API from using "bc" to calling it "bcc". 
 
