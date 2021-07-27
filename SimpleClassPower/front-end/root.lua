@@ -22,6 +22,12 @@ local GetLayout = Private.GetLayout
 local GetMedia = Private.GetMedia
 local Colors = Private.Colors
 
+-- Constants for client version
+local LibClientBuild = Wheel("LibClientBuild")
+local IsClassic = LibClientBuild:IsClassic()
+local IsTBC = LibClientBuild:IsTBC()
+local IsRetail = LibClientBuild:IsRetail()
+
 ---------------------------------------------------
 -- Class Resource Styling
 ---------------------------------------------------
