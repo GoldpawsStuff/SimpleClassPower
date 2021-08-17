@@ -18,6 +18,7 @@ local HasOverrideActionBar = HasOverrideActionBar
 local HasTempShapeshiftActionBar = HasTempShapeshiftActionBar
 local IsPlayerSpell = IsPlayerSpell
 local IsPossessBarVisible = IsPossessBarVisible
+local PlayerVehicleHasComboPoints = PlayerVehicleHasComboPoints
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitAura = UnitAura
 local UnitCanAttack = UnitCanAttack
@@ -1045,7 +1046,7 @@ if (IsRetail) then
 			or (event == "UNIT_EXITED_VEHICLE")
 		then
 			element.inVehicle = UnitInVehicle("player")
-			element.hasVehicleUI = UnitHasVehiclePlayerFrameUI("player")
+			element.hasVehicleUI = UnitHasVehiclePlayerFrameUI("player") and PlayerVehicleHasComboPoints()
 		end 
 
 		local newType 
@@ -1187,5 +1188,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 57)
+	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 58)
 end 
