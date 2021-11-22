@@ -9,8 +9,6 @@
 ## Version: @project-version@
 
 ## X-Category: Interface Enhancements
-## X-Discord: https://discord.gg/MUSfWXd
-## X-Website: https://www.patreon.com/goldpawsstuff
 ## X-Curse-Project-ID: 296245
 ## X-Wago-ID: qv63j7Nb
 ## X-License: Custom
