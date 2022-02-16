@@ -1,4 +1,4 @@
-local LibTime = Wheel:Set("LibTime", 9)
+local LibTime = Wheel:Set("LibTime", 12)
 if (not LibTime) then	
 	return
 end
@@ -40,13 +40,37 @@ local check = function(value, num, ...)
 	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
+-- This. Is. The. Worst. 
 local dateInRange = function(day1, month1, year1, day2, month2, year2)
 	local currentDay = tonumber(date("%d"))
 	local currentMonth = tonumber(date("%m"))
 	local currentYear = tonumber(date("%Y")) -- full 4 digit year
-	local firstReached = (currentYear >= year1) and (currentMonth >= month1) and (currentDay >= day1)
-	local secondNotPassed = (currentYear <= year2) and (currentMonth <= month2) and (currentDay <= day2)
-	return (firstReached) and (secondNotPassed)
+
+	-- Wrong year, no match.
+	if (currentYear < year1) or (currentYear > year2) then
+		return false
+	end
+
+	-- Same year and first date passed?
+	if (currentYear == year1) and (currentMonth >= month1) and (currentDay >= day1) then
+
+		-- It expires this or next year?
+		if (year2 > currentYear) then
+			return true -- next year, so still in the range.
+		
+		-- It expires this year, but not this month.
+		elseif (currentMonth < month2) then
+			return true -- haven't reached end month, so still in the range.
+
+		-- We've passed the expiration date.
+		elseif (currentMonth > month2) then
+			return false -- we passed the end month, not in range.
+
+		-- Same month, let's compare days.
+		else
+			return (currentDay <= day2)
+		end
+	end
 end
 
 -- Calculates standard hours from a give 24-hour time
@@ -96,9 +120,9 @@ LibTime.GetTime = function(self, useStandardTime, useServerTime)
 	return self[useServerTime and "GetServerTime" or "GetLocalTime"](self, useStandardTime)
 end
 
--- 2021 Retail Winter Veil.
+-- 2022 Retail Winter Veil.
 LibTime.IsWinterVeil = function(self)
-	return dateInRange(16,12,2021,2,1,2022)
+	return dateInRange(16,12,2022,2,1,2023)
 end
 
 -- 2022 Retail Love is in the Air.
