@@ -1,4 +1,4 @@
-local LibUnitFrame = Wheel:Set("LibUnitFrame", 89)
+local LibUnitFrame = Wheel:Set("LibUnitFrame", 93)
 if (not LibUnitFrame) then	
 	return
 end
@@ -31,6 +31,7 @@ local _G = _G
 local assert = assert
 local debugstack = debugstack
 local error = error
+local ipairs = ipairs
 local math_floor = math.floor
 local pairs = pairs
 local select = select
@@ -38,6 +39,7 @@ local setmetatable = setmetatable
 local string_format = string.format
 local string_gsub = string.gsub
 local string_join = string.join
+local string_lower = string.lower
 local string_match = string.match
 local table_insert = table.insert
 local table_remove = table.remove
@@ -48,6 +50,9 @@ local unpack = unpack
 -- Blizzard API
 local CreateFrame = CreateFrame
 local FriendsDropDown = FriendsDropDown
+local GetAddOnEnableState = GetAddOnEnableState
+local GetAddOnInfo = GetAddOnInfo
+local GetNumAddOns = GetNumAddOns
 local SecureCmdOptionParse = SecureCmdOptionParse
 local ShowBossFrameWhenUninteractable = ShowBossFrameWhenUninteractable
 local ToggleDropDownMenu = ToggleDropDownMenu
@@ -56,6 +61,7 @@ local UnitGUID = UnitGUID
 local UnitHasVehicleUI = UnitHasVehicleUI
 local UnitIsEnemy = UnitIsEnemy
 local UnitIsFriend = UnitIsFriend
+local UnitName = UnitName
 
 -- Constants for client version
 local IsClassic = LibClientBuild:IsClassic()
@@ -198,6 +204,23 @@ local check = function(value, num, ...)
 	error(string_format("Bad argument #%.0f to '%s': %s expected, got %s", num, name, types, type(value)), 3)
 end
 
+-- Check if an addon is enabled	in the addon listing
+local IsAddOnEnabled = function(target)
+	local target = string_lower(target)
+	for i = 1,GetNumAddOns() do
+		local name, _, _, loadable = GetAddOnInfo(i)
+		local enabled = not(GetAddOnEnableState(UnitName("player"), i) == 0) 
+		if (string_lower(name) == target) then
+			if (enabled and loadable) then
+				return true
+			end
+		end
+	end
+end
+
+-- Create a constant for this
+local IS_TOTALRP3_ENABLED = IsAddOnEnabled("totalRP3")
+
 -- Library Updates
 --------------------------------------------------------------------------
 -- global update limit, no elements can go above this
@@ -247,26 +270,44 @@ UnitFrame.OnEnter = function(self)
 
 	self.isMouseOver = true
 
-	local tooltip = self:GetTooltip()
-	tooltip:Hide()
-	tooltip:SetDefaultAnchor(self)
-	tooltip:SetMinimumWidth(160)
-	tooltip:SetUnit(self.unit)
+	if (IS_TOTALRP3_ENABLED) then
+		if (GameTooltip:IsForbidden()) then
+			return
+		end
 
-	if self.PostEnter then 
-		self:PostEnter()
-	end 
+		GameTooltip_SetDefaultAnchor(GameTooltip, self)
+		GameTooltip:SetUnit(self.unit)
+
+	else
+		local tooltip = self:GetTooltip()
+		tooltip:Hide()
+		tooltip:SetDefaultAnchor(self)
+		tooltip:SetMinimumWidth(160)
+		tooltip:SetUnit(self.unit)
+
+		if self.PostEnter then 
+			self:PostEnter()
+		end 
+	end
 end
 
 UnitFrame.OnLeave = function(self)
 	self.isMouseOver = nil
 
-	local tooltip = self:GetTooltip()
-	tooltip:Hide()
+	if (IS_TOTALRP3_ENABLED) then
+		if (GameTooltip:IsForbidden()) then
+			return
+		end
+		GameTooltip:Hide()
 
-	if self.PostLeave then 
-		self:PostLeave()
-	end 
+	else
+		local tooltip = self:GetTooltip()
+		tooltip:Hide()
+
+		if self.PostLeave then 
+			self:PostLeave()
+		end 
+	end
 end
 
 UnitFrame.OnHide = function(self)
@@ -601,4 +642,16 @@ end
 -- Upgrade existing embeds, if any
 for target in pairs(LibUnitFrame.embeds) do
 	LibUnitFrame:Embed(target)
+end
+
+-- Upgrade existing frame script handlers, if any
+for frame in pairs(frames) do
+	for _,handler in ipairs({ "OnEnter", "OnLeave", "Hide" }) do
+		local method = frame[handler]
+		local script = frame:GetScript(handler)
+		if (method and script) and (method == script) then
+			frame[handler] = UnitFrame[method]
+			frame:SetScript(handler, UnitFrame[method])
+		end
+	end
 end
