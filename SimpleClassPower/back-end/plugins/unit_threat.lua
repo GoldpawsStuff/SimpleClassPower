@@ -17,12 +17,12 @@ local UpdateColor = function(element, unit, status, r, g, b)
 	end
 	if (element.PostUpdateColor) then
 		element:PostUpdateColor(unit, status, r, g, b)
-	end 
+	end
 end
 
 local Update = function(self, event, unit, ...)
 	if (not unit) or (unit ~= self.unit) then
-		return 
+		return
 	end
 	local element = self.Threat
 
@@ -43,14 +43,14 @@ local Update = function(self, event, unit, ...)
 	local status
 
 	-- BUG: Non-existent '*target' or '*pet' units cause UnitThreatSituation() errors (thank you oUF!)
-	if UnitExists(unit) and ((not element.hideSolo) or (IsInGroup() or IsInInstance())) then
+	if UnitExists(unit) and ((not element.hideSolo) or IsInGroup() or IsInInstance()) then
 		local feedbackUnit = element.feedbackUnit
 		if (feedbackUnit and (feedbackUnit ~= unit) and UnitExists(feedbackUnit)) then
 			status = UnitThreatSituation(feedbackUnit, unit)
 		else
 			status = UnitThreatSituation(unit)
 		end
-	end 
+	end
 
 	element.status = status
 
@@ -62,7 +62,7 @@ local Update = function(self, event, unit, ...)
 	else
 		element:Hide()
 	end
-	
+
 	if (element.PostUpdate) then
 		return element:PostUpdate(unit, status, r, g, b)
 	end
@@ -88,7 +88,7 @@ local Enable = function(self)
 
 		return true
 	end
-end 
+end
 
 local Disable = function(self)
 	local element = self.Threat
@@ -99,9 +99,9 @@ local Disable = function(self)
 
 		element:Hide()
 	end
-end 
+end
 
 -- Register it with compatible libraries
-for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do 
-	Lib:RegisterElement("Threat", Enable, Disable, Proxy, 20)
-end 
+for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do
+	Lib:RegisterElement("Threat", Enable, Disable, Proxy, 23)
+end

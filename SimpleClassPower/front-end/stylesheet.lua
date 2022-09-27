@@ -5,7 +5,7 @@ local LibDB = Wheel("LibDB")
 local GetMedia = Private.GetMedia
 local Colors = Private.Colors
 
--- Define everything here so the order 
+-- Define everything here so the order
 -- in which they call each other doesn't matter.
 local ClassPower_PostUpdate
 local ClassPower_PostCreatePoint
@@ -19,23 +19,23 @@ ClassPower_PostCreatePoint = function(element, id, point)
 
 	-- Setup the point
 	point:SetSize(unpack(layout.ClassPowerPointSize))
-	point:SetSparkTexture(layout.ClassPowerSparkTexture) 
+	point:SetSparkTexture(layout.ClassPowerSparkTexture)
 	point:SetStatusBarTexture(layout.ClassPowerPointTexture)
 	point:SetTexCoord(layout.ClassPowerPointTexCoordFunction(id))
 
-	-- Force disable smoothing, it's too inaccurate for this. 
+	-- Force disable smoothing, it's too inaccurate for this.
 	point:DisableSmoothing(true)
 
 	-- Hardcode the bars to grow from bottom to top.
-	point:SetOrientation("UP") 
+	point:SetOrientation("UP")
 
 	-- Position the point
 	-- We don't offer any growth choices, it's always right to left.
-	if (i == 1) then 
+	if (i == 1) then
 		point:Place("TOPLEFT", element, "TOPLEFT", 0, 0)
-	else 
+	else
 		point:Place("TOPLEFT", element[id-1], "TOPRIGHT", 0, 0)
-	end 
+	end
 
 	-- Backdrop, aligned to the full point
 	point.slotTexture:ClearAllPoints()
@@ -68,67 +68,67 @@ ClassPower_PostUpdate = function(element, unit, min, max, newMax, powerType)
 	-- Figure out the number of pills to divide the bar into.
 	-- Anything not having an exception here will default to 5.
 	local currentPillCount
-	if (powerType == "RUNES") or ((powerType == "CHI") and (UnitPowerMax("player", SPELL_POWER_CHI) == 6)) then 
+	if (powerType == "RUNES") or ((powerType == "CHI") and (UnitPowerMax("player", SPELL_POWER_CHI) == 6)) then
 		currentPillCount = 6
-	elseif (powerType == "STAGGER") then 
+	elseif (powerType == "STAGGER") then
 		currentPillCount = 3
 	else
 		currentPillCount = 5
-	end 
+	end
 
 	-- Retrieve the stylesheet
 	local layout = UnitFramePlayerHUD
 
 	-- Make sure the resources are centered
 	local elementWidth = currentPillCount * layout.ClassPowerPointSize[1]
-	if elementWidth ~= element.width then 
+	if elementWidth ~= element.width then
 		element:SetWidth(elementWidth)
 		element.width = elementWidth
 	end
 
 	-- Update Glow overlays
-	for i = 1, #element do 
+	for i = 1, #element do
 		local point = element[i]
-		if point:IsShown() then 
+		if point:IsShown() then
 			local value = point:GetValue()
 			local min, max = point:GetMinMaxValues()
-		
+
 			-- Base it all on the bar's current color
 			local r, g, b = point:GetStatusBarColor()
 			point.glow:SetVertexColor(r, g, b, .75)
 			point.slotTexture:SetVertexColor(r*.25, g*.25, b*.25, .85)
-		
+
 			-- Adjust texcoords of the overlay glow to match the bars
 			local coords = point.glow.texCoords
 			point.glow:SetTexCoord(coords[1], coords[2], coords[4] - (coords[4]-coords[3]) * ((value-min)/(max-min)), coords[4])
-		end 
-	end 
+		end
+	end
 
 end
 
 UnitFramePlayerHUD = {
 
-	-- Default position of the entire frame, 
-	-- will be overridden if the user changes position manually.  
-	Place = { "BOTTOM", "UICenter", "BOTTOM", 0, 300 }, 
+	-- Default position of the entire frame,
+	-- will be overridden if the user changes position manually.
+	Place = { "BOTTOM", "UICenter", "BOTTOM", 0, 300 },
 
-	-- These are not the size and places of the actual element, 
+	-- These are not the size and places of the actual element,
 	-- do NOT change these as they are needed for it to function!
-	ClassPowerSize = { 5*70, 70 }, 
+	ClassPowerSize = { 5*70, 70 },
 	ClassPowerPlace = { "CENTER", 0, 0 },
 
 	-- Point bars
-	ClassPowerPointSize = { 70,70 }, 
+	ClassPowerPointSize = { 70,70 },
 	ClassPowerPointTexture = GetMedia("diabolic_runes"),
 	ClassPowerPointTexCoordFunction = function(id) return (id-1)*128/1024, id*128/1024, 128/512, 256/512 end,
 
 	-- Slot textures
-	ClassPowerSlotSize = { 70,70 }, 
+	ClassPowerSlotSize = { 70,70 },
 	ClassPowerSlotTexture = GetMedia("diabolic_runes"),
 	ClassPowerSlotTexCoordFunction = function(id) return (id-1)*128/1024, id*128/1024, 0/512, 128/512 end,
 
 	-- Overlay glow
-	ClassPowerGlowSize = { 70,70 }, 
+	ClassPowerGlowSize = { 70,70 },
 	ClassPowerGlowTexture = GetMedia("diabolic_runes"),
 	ClassPowerGlowBlendMode = "ADD",
 	ClassPowerGlowTexCoordFunction = function(id) return (id-1)*128/1024, id*128/1024, 256/512, 384/512 end,
@@ -139,6 +139,7 @@ UnitFramePlayerHUD = {
 	-- Visibility and sorting
 	ClassPowerMaxComboPoints = 5, -- maximum displayed points (does not affect runes)
 	ClassPowerAlphaWhenEmpty = .5, -- alpha of empty points
+	ClassPowerAlphaWhenEmptyRunes = .5, -- wrath only
 	ClassPowerAlphaWhenOutOfCombat = .5, -- alpha multiplier of all points when not in combat
 	ClassPowerAlphaWhenOutOfCombatRunes = .5, -- alpha multiplier of all runes when not in combat
 	ClassPowerReverseSides = false, -- we don't use it here, just left it for semantics
@@ -147,7 +148,7 @@ UnitFramePlayerHUD = {
 	-- Point creation and updates
 	ClassPowerPostCreatePoint = ClassPower_PostCreatePoint,
 	ClassPowerPostUpdate = ClassPower_PostUpdate
-	
+
 }
 
 LibDB:NewDatabase(ADDON..":[UnitFramePlayerHUD]", UnitFramePlayerHUD)

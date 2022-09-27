@@ -2,9 +2,9 @@ local ADDON, Private = ...
 local L = Wheel("LibLocale"):GetLocale(ADDON)
 local Core = Wheel("LibModule"):NewModule(ADDON, "LibDB", "LibMessage", "LibEvent", "LibSlash", "LibSecureHook", "LibFrame", "LibUnitFrame", "LibStatusBar","LibMover")
 
--- Tell the back-end what addon to look for before 
--- initializing this module and all its submodules. 
-Core:SetAddon(ADDON) 
+-- Tell the back-end what addon to look for before
+-- initializing this module and all its submodules.
+Core:SetAddon(ADDON)
 
 -- Tell the backend where our saved variables are found.
 -- *it's important that we're doing this here, before any module configs are created.
@@ -42,13 +42,13 @@ local Style = function(self, unit, id, layout, ...)
 
 	-- Frame
 	-----------------------------------------------------------
-	self:SetSize(unpack(layout.ClassPowerSize)) 
+	self:SetSize(unpack(layout.ClassPowerSize))
 	self:Place("CENTER", "UICenter", "CENTER", 0, 0)
 
-	-- We Don't want this clickable, 
+	-- We Don't want this clickable,
 	-- it's in the middle of the screen!
-	self:EnableMouse(false) 
-	self.ignoreMouseOver = true 
+	self:EnableMouse(false)
+	self.ignoreMouseOver = true
 
 	-- Scaffolds
 	-----------------------------------------------------------
@@ -56,7 +56,7 @@ local Style = function(self, unit, id, layout, ...)
 	local backdrop = self:CreateFrame("Frame")
 	backdrop:SetAllPoints()
 	backdrop:SetFrameLevel(self:GetFrameLevel())
-	
+
 	-- frame to contain bars, icons, etc
 	local content = self:CreateFrame("Frame")
 	content:SetAllPoints()
@@ -71,25 +71,26 @@ local Style = function(self, unit, id, layout, ...)
 	-----------------------------------------------------------
 	local classPower = backdrop:CreateFrame("Frame")
 	classPower:SetSize(unpack(layout.ClassPowerSize)) -- minimum size, this is really just an anchor
-	classPower:SetPoint(unpack(layout.ClassPowerPlace)) 
+	classPower:SetPoint(unpack(layout.ClassPowerPlace))
 
 	-- User configurable settings
 	classPower.colorClass = db.enableClassColor
-	classPower.hideWhenUnattackable = db.enableSmartVisibility 
-	classPower.hideWhenNoTarget = db.enableSmartVisibility 
+	classPower.hideWhenUnattackable = db.enableSmartVisibility
+	classPower.hideWhenNoTarget = db.enableSmartVisibility
 	classPower.hideWhenEmpty = db.enableSmartVisibility
 
 	-- Addon chosen settings
-	classPower.alphaEmpty = layout.ClassPowerAlphaWhenEmpty 
+	classPower.alphaEmpty = layout.ClassPowerAlphaWhenEmpty
+	classPower.alpahEmptyRunes = layout.ClassPowerAlphaWhenEmptyRunes
 	classPower.alphaNoCombat = layout.ClassPowerAlphaWhenOutOfCombat
 	classPower.alphaNoCombatRunes = layout.ClassPowerAlphaWhenOutOfCombatRunes
-	classPower.flipSide = layout.ClassPowerReverseSides 
+	classPower.flipSide = layout.ClassPowerReverseSides
 	classPower.maxComboPoints = layout.ClassPowerMaxComboPoints
-	classPower.runeSortOrder = layout.ClassPowerRuneSortOrder 
+	classPower.runeSortOrder = layout.ClassPowerRuneSortOrder
 
 	-- Creating 6 frames since runes require it
-	for i = 1,6 do 
-		
+	for i = 1,6 do
+
 		-- Main point object
 		local point = classPower:CreateStatusBar() -- the widget require Wheel statusbars
 		point:SetSmoothingFrequency(.25) -- keep bar transitions fairly fast
@@ -97,8 +98,8 @@ local Style = function(self, unit, id, layout, ...)
 		point:SetValue(1)
 
 		-- Empty slot texture
-		-- Make it slightly larger than the point textures, 
-		-- to give a nice darker edge around the points. 
+		-- Make it slightly larger than the point textures,
+		-- to give a nice darker edge around the points.
 		point.slotTexture = point:CreateTexture()
 		point.slotTexture:SetDrawLayer("BACKGROUND", -1)
 		point.slotTexture:SetAllPoints(point)
@@ -108,9 +109,9 @@ local Style = function(self, unit, id, layout, ...)
 		point.glow:SetDrawLayer("ARTWORK", 1)
 		point.glow:SetAllPoints(point:GetStatusBarTexture())
 
-		if layout.ClassPowerPostCreatePoint then 
+		if layout.ClassPowerPostCreatePoint then
 			layout.ClassPowerPostCreatePoint(classPower, i, point)
-		end 
+		end
 
 		classPower[i] = point
 	end
@@ -129,15 +130,15 @@ end
 ---------------------------------------------------
 Core.IsDefaultPosition = function(self)
 	return self.mover:IsDefaultPosition()
-end 
+end
 
 Core.IsDefaultScale = function(self)
 	return self.mover:IsDefaultScale()
-end 
+end
 
 Core.IsDefaultPositionAndScale = function(self)
 	return self.mover:IsDefaultPosition() and self.mover:IsDefaultScale()
-end 
+end
 
 Core.PostUpdateSettings = function(self)
 	local db = self.db
@@ -147,7 +148,7 @@ Core.PostUpdateSettings = function(self)
 
 	-- Update frame element switches
 	element.hideWhenUnattackable = db.enableSmartVisibility
-	element.hideWhenNoTarget = db.enableSmartVisibility 
+	element.hideWhenNoTarget = db.enableSmartVisibility
 	element.hideWhenEmpty = db.enableSmartVisibility
 	element.colorClass = db.enableClassColor
 
@@ -158,19 +159,19 @@ Core.PostUpdateSettings = function(self)
 end
 
 Core.OnEvent = function(self, event, ...)
-	if (event == "GP_MOVER_UPDATED") then 
+	if (event == "GP_MOVER_UPDATED") then
 		local mover, target, point, offsetX, offsetY = ...
-		if (mover == self.mover) and (target == self.frame) then 
+		if (mover == self.mover) and (target == self.frame) then
 			self.db.savedPosition = { point, "UICenter", point, offsetX, offsetY }
-		end 
-	elseif (event == "GP_MOVER_SCALE_UPDATED") then 
-		local mover, target, scale = ... 
-		if (mover == self.mover) and (target == self.frame) then 
-			if (self:IsDefaultScale()) then 
+		end
+	elseif (event == "GP_MOVER_SCALE_UPDATED") then
+		local mover, target, scale = ...
+		if (mover == self.mover) and (target == self.frame) then
+			if (self:IsDefaultScale()) then
 				self.db.savedScale = nil
-			else 
+			else
 				self.db.savedScale = scale
-			end 
+			end
 		end
 	end
 end
@@ -178,44 +179,44 @@ end
 Core.OnChatCommand = function(self, editBox, ...)
 	local db = self.db
 	local cmd, arg = ...
-	if (cmd == "classcolor") then 
+	if (cmd == "classcolor") then
 		local enableClassColor = db.enableClassColor
-		if (arg == "on") or (arg == "enable") then 
-			db.enableClassColor = true 
+		if (arg == "on") or (arg == "enable") then
+			db.enableClassColor = true
 		elseif (arg == "off") or (arg == "disable") or (not arg) then
 			db.enableClassColor = false
-		end 
-		if (enableClassColor ~= db.enableClassColor) then 
+		end
+		if (enableClassColor ~= db.enableClassColor) then
 			self:PostUpdateSettings()
 		end
 
-	elseif (cmd == "show") then 
+	elseif (cmd == "show") then
 		local enableSmartVisibility = db.enableSmartVisibility
-		db.enableSmartVisibility = (arg == "smart") and true or false 
-		if (enableSmartVisibility ~= db.enableSmartVisibility) then 
+		db.enableSmartVisibility = (arg == "smart") and true or false
+		if (enableSmartVisibility ~= db.enableSmartVisibility) then
 			self:PostUpdateSettings()
 		end
-	elseif (cmd == "lock") then 
+	elseif (cmd == "lock") then
 		self:LockMover(self.frame)
-	elseif (cmd == "unlock") then 
+	elseif (cmd == "unlock") then
 		self:UnlockMover(self.frame)
-	elseif (cmd == "help") then 
+	elseif (cmd == "help") then
 		print(L["/scp - Toggle the overlay for moving/scaling."])
 		print(L["/scp classcolor on - Enable class colors."])
 		print(L["/scp classcolor off - Disable class colors."])
 		print(L["/scp show always - Always show."])
 		print(L["/scp show smart - Hide when no target or unattackable."])
 		print(L["/scp help - Show this."])
-	else 
-		self:ToggleMover(self.frame) 
-	end 
+	else
+		self:ToggleMover(self.frame)
+	end
 end
 
 ---------------------------------------------------
 -- Initialization
 ---------------------------------------------------
 Core.OnInit = function(self)
-	
+
 	self:RemoveConfig("Core")
 
 	self.db = GetConfig(ADDON)
@@ -225,14 +226,14 @@ Core.OnInit = function(self)
 
 	-- Setup our frame and its anchor
 	---------------------------------------------------------------------
-	-- The main frame, this is a secure unitframe, 
-	-- though have no mouse interaction. 
+	-- The main frame, this is a secure unitframe,
+	-- though have no mouse interaction.
 	local frame = self:SpawnUnitFrame("player", "UICenter", "Style")
 	frame:Place(unpack(self.db.savedPosition or self.layout.Place))
 	self.frame = frame
-	
+
 	-- Make it movable!
-	local mover = self:CreateMover(frame) 
+	local mover = self:CreateMover(frame)
 	mover:SetName(ADDON)
 	mover:SetMinMaxScale(.5, 1.5, .05)
 	mover:SetDefaultPosition(unpack(self.layout.Place))
@@ -246,15 +247,15 @@ Core.OnInit = function(self)
 		tooltip:AddLine(L["<Shift Right Click> to reset scale"], Colors.green[1], Colors.green[2], Colors.green[3])
 		tooltip:Show()
 	end
-	self.mover = mover 
+	self.mover = mover
 
 	-- Register a chat command to toggle the config window
 	---------------------------------------------------------------------
 	self:RegisterChatCommand("scp", "OnChatCommand")
 	self:RegisterChatCommand("simpleclasspower", "OnChatCommand")
-end 
+end
 
 Core.OnEnable = function(self)
 	self:RegisterMessage("GP_MOVER_UPDATED", "OnEvent")
 	self:RegisterMessage("GP_MOVER_SCALE_UPDATED", "OnEvent")
-end 
+end

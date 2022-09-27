@@ -25,17 +25,7 @@ jobs:
         with:
           fetch-depth: 0  # gets git history for changelogs
 
-      - name: Package Retail
+      - name: Package
         uses: BigWigsMods/packager@v2
         with:
-          args: -g retail -m .pkgmeta
-
-      - name: Package Classic
-        uses: BigWigsMods/packager@v2
-        with:
-          args: -g classic -m .pkgmeta
-
-      - name: Package BC
-        uses: BigWigsMods/packager@v2
-        with:
-          args: -g bcc -m .pkgmeta
+          args: -m .pkgmeta
