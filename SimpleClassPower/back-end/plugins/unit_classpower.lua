@@ -506,10 +506,6 @@ if (IsWrath) then
 						end
 						element.ColorRune(self, point, point.runeType)
 						point:SetAlpha(point.ready and fullAlpha or chargingAlpha)
-						if (point.bg) then
-							local mult = element.backdropMultiplier or 1/3
-							point.bg:SetVertexColor(r*mult, g*mult, b*mult)
-						end
 					end
 				end
 
@@ -527,10 +523,6 @@ if (IsWrath) then
 						end
 						element.ColorRune(self, point, point.runeType)
 						point:SetAlpha(point.ready and fullAlpha or chargingAlpha)
-						if (point.bg) then
-							local mult = element.backdropMultiplier or 1/3
-							point.bg:SetVertexColor(r*mult, g*mult, b*mult)
-						end
 					end
 				end
 
@@ -546,10 +538,6 @@ if (IsWrath) then
 						end
 						element.ColorRune(self, point, point.runeType)
 						point:SetAlpha(element.alphaWhenHiddenRunes or 0)
-						if (point.bg) then
-							local mult = element.backdropMultiplier or 1/3
-							point.bg:SetVertexColor(r*mult, g*mult, b*mult)
-						end
 					end
 				end
 
@@ -1420,5 +1408,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do
-	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 62)
+	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 63)
 end
