@@ -1375,12 +1375,10 @@ local Disable = function(self)
 	local element = self.ClassPower
 	if element then
 
-		-- Disable the current powerType, if any
-		if element._currentType then
-			element.DisablePower(self)
-			element._currentType = nil
-			element.powerType = nil
-		end
+		-- Disable the current powerType, always
+		element.DisablePower(self)
+		element._currentType = nil
+		element.powerType = nil
 
 		-- Remove generic events
 		self:UnregisterEvent("UNIT_DISPLAYPOWER", Proxy)
@@ -1408,5 +1406,5 @@ end
 
 -- Register it with compatible libraries
 for _,Lib in ipairs({ (Wheel("LibUnitFrame", true)), (Wheel("LibNamePlate", true)) }) do
-	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 63)
+	Lib:RegisterElement("ClassPower", Enable, Disable, Proxy, 65)
 end
