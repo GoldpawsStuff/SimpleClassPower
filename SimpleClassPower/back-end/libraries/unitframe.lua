@@ -533,11 +533,7 @@ LibUnitFrame.SpawnUnitFrame = function(self, unit, parent, styleFunc, ...)
 
 	if (frame.ignoreMouseOver) then
 		frame:EnableMouse(false)
-		if (IsDragonflight) then
-			frame:RegisterForClicks()
-		else
-			frame:RegisterForClicks("")
-		end
+		frame:RegisterForClicks()
 	else
 		frame:SetAttribute("*type1", "target")
 		frame:SetAttribute("*type2", "togglemenu")
